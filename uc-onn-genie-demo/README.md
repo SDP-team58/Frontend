@@ -6,13 +6,15 @@ This is a modern React/Next.js frontend project, designed for rapid UI developme
 
 ## Project Structure
 
-- **app/**: Next.js app directory (routing, global styles, layout)
-- **components/**: Reusable UI components (chat window, header, scenario panel, etc.)
-- **components/ui/**: Radix UI and custom UI primitives
-- **hooks/**: Custom React hooks
-- **lib/**: Utility functions and scenario logic
-- **public/**: Static assets
-- **styles/**: Global CSS (Tailwind)
+```
+├─ app/                  # Next.js app directory (routing, global styles, layout)
+├─ components/           # Reusable UI components (chat window, header, scenario panel, etc)
+   └─ ui/                # Radix UI and custom UI primitives
+├─ hooks/                # Custom React hooks
+├─ lib/                  # Utility functions and scenario logic
+├─ public/               # Static assets
+└─ styles/               # Global CSS (Tailwind)
+```
 
 ## Key Technologies
 
