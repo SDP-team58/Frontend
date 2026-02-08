@@ -1,6 +1,7 @@
 "use client";
 
 import LoginButton from "@/components/login-button";
+import LogoutButton from "@/components/logout-button";
 
 export default function Header({ user }: { user?: any }) {
   const username =
@@ -20,8 +21,11 @@ export default function Header({ user }: { user?: any }) {
           </div>
 
           {username ? (
-            <div className="text-sm opacity-90">
-              Signed in as <span className="font-semibold">{username}</span>
+            <div className="flex items-center gap-4 text-sm opacity-90">
+              <div>
+                Signed in as <span className="font-semibold">{username}</span>
+              </div>
+              <LogoutButton />
             </div>
           ) : (
             <LoginButton />
