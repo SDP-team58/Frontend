@@ -21,7 +21,7 @@ interface ChatWindowProps {
   onSendMessage: () => void
   onKeyPress: (e: React.KeyboardEvent<HTMLInputElement>) => void
   isLoading: boolean
-  chatEndRef: React.RefObject<HTMLDivElement>
+  chatEndRef: React.RefObject<HTMLDivElement | null>
 }
 
 export default function ChatWindow({
