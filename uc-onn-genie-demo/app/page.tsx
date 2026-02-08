@@ -9,7 +9,7 @@ export default async function Page() {
   const user = token ? verifyAuthToken(token) : null
 
   if (user) {
-    return <MainApp />
+    return <MainApp user={user} />
   }
 
   return <PublicHome />

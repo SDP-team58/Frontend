@@ -29,9 +29,6 @@ export async function GET(req: Request) {
 
   let resText = ''
   try {
-    console.log(`Validating CAS ticket at: ${validateUrl}`)
-    console.log(`Service (raw): ${service}`)
-    console.log(`Service (encoded): ${encodedService}`)
     const r = await fetch(validateUrl)
     resText = await r.text()
     console.log(`CAS response: ${resText}`)

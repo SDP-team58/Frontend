@@ -15,7 +15,7 @@ interface Message {
   isLoading?: boolean
 }
 
-export default function MainApp() {
+export default function MainApp({ user }: { user?: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -104,7 +104,7 @@ export default function MainApp() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <Header />
+      <Header user={user} />
       <div className="flex flex-1 overflow-hidden gap-4 p-4 md:gap-6 md:p-6">
         {/* Left panel - Scenarios */}
         <ScenarioPanel onScenarioClick={handleScenarioClick} />
