@@ -83,7 +83,7 @@ pnpm lint
 
 This repo includes a server-side CAS SSO integration using a Next.js Route Handler.
 
-- Login button (client): `components/header.tsx` redirects the browser to the CAS `/login` endpoint with `service` set to `/api/cas` on the current origin.
+- Login button (client): `components/login-button.tsx` redirects the browser to the CAS `/login` endpoint with `service` set to `/api/cas` on the current origin.
 - Callback (server): `app/api/cas/route.ts` validates the CAS `ticket` server-side via CAS `/serviceValidate` and extracts the username.
 - Session: a signed JWT is issued and set as an HttpOnly cookie named `auth` (see `lib/auth.ts`).
 

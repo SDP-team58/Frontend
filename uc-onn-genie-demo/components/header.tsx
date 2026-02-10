@@ -3,14 +3,6 @@
 import LogoutButton from "@/components/logout-button";
 
 export default function Header({ user }: { user: any }) {
-  const username =
-    typeof user === "string"
-      ? user
-      : user?.user || user?.username;
-
-  if (!username) {
-    throw new Error("Header rendered without authenticated user");
-  }
 
   return (
     <header className="border-b border-border bg-primary text-primary-foreground">
@@ -27,7 +19,7 @@ export default function Header({ user }: { user: any }) {
 
           <div className="flex items-center gap-4 text-sm opacity-90">
             <div>
-              Signed in as <span className="font-semibold">{username}</span>
+              Signed in as <span className="font-semibold">{user.user}</span>
             </div>
             <LogoutButton />
           </div>

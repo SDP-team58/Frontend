@@ -29,23 +29,37 @@ export async function GET(req: Request) {
 
   let resText = ''
   try {
-    const r = await fetch(validateUrl)
-    resText = await r.text()
-    console.log(`CAS response: ${resText}`)
-  } catch (e) {
-    console.error('Error fetching CAS validation:', e)
-    return NextResponse.redirect(new URL(`/?auth=error_fetching_cas`, url))
-  }
+    const response = await fetch(validateUrl);
+    resText = await response.text();
+    console.log(
+      `CAS validation response: status=${response.status}, ok=${response.ok}, length=${resText.length}`,
+    );
 
-  // Simple XML parse to extract username from CAS response
-  // Expected success response contains: <cas:authenticationSuccess>...<cas:user>USERNAME</cas:user>
-  const userMatch = resText.match(/<cas:user[^>]*>([^<]+)<\/cas:user>/i)
-  if (!userMatch) {
-    // Authentication failed or invalid ticket
+    // If CAS returns a non-2xx response, surface a clearer error for debugging.
+    if (!response.ok) {
+      console.error(`CAS validation returned non-OK status: ${response.status}`);
+      return NextResponse.redirect(new URL(`/?auth=cas_status_${response.status}`, url));
+    }
+  } catch (e) {
+    console.error("Error fetching CAS validation:", e);
+    return NextResponse.redirect(new URL(`/?auth=error_fetching_cas`, url));
+  }
+  // Verify the CAS response contains an authentication success block before extracting the user
+  const successBlockMatch = resText.match(/<cas:authenticationSuccess\b[^>]*>([\s\S]*?)<\/cas:authenticationSuccess>/i)
+  if (!successBlockMatch) {
+    console.error("CAS response did not contain <cas:authenticationSuccess> block. Response snippet:", resText.slice(0, 200));
+    // Treat as invalid ticket (no authenticated user found)
     return NextResponse.redirect(new URL('/?auth=invalid_ticket', url))
   }
 
-  const username = userMatch[1]
+  // Extract username only from within the authenticated block to avoid false positives in error HTML
+  const userMatch = successBlockMatch[1].match(/<cas:user[^>]*>([^<]+)<\/cas:user>/i)
+  if (!userMatch) {
+    console.error("CAS authenticationSuccess block missing <cas:user> element. Block snippet:", successBlockMatch[1].slice(0, 200));
+    return NextResponse.redirect(new URL('/?auth=invalid_ticket', url))
+  }
+
+  const username = userMatch[1].trim()
 
   // Create JWT and set as HttpOnly cookie
   const token = signAuthToken({ user: username })

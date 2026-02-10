@@ -15,7 +15,7 @@ interface Message {
   isLoading?: boolean
 }
 
-export default function MainApp({ user }: { user?: Record<string, unknown> }) {
+export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",

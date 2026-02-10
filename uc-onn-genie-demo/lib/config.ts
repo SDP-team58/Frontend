@@ -1,4 +1,4 @@
-// Server-only configuration constants.
+// Configuration constants.
 // Place small, non-secret constants here. Secrets should remain in environment variables.
 
 // The CAS base URL is fixed for this project (UConn CAS) and treated as a constant
