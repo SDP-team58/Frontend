@@ -1,0 +1,78 @@
+import { NextResponse } from 'next/server'
+import { signAuthToken } from '@/lib/auth'
+import { CAS_BASE } from '@/lib/config'
+
+// Server-side CAS callback handler
+// Assumptions (documented):
+// - This code runs on the server (Next.js Route Handler under app/api).
+// - `process.env.JWT_SECRET` must be set to sign session tokens.
+
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const ticket = url.searchParams.get('ticket')
+
+  if (!ticket) {
+    return NextResponse.redirect(new URL('/?auth=missing_ticket', url))
+  }
+
+  // Compute the service from the incoming request URL (without querystring).
+  // Using the exact request path ensures it matches the `service` used when
+  // CAS issued the ticket. Mismatched service strings are the most common
+  // reason for `INVALID_TICKET` from CAS.
+  const service = `${url.origin}${url.pathname}`
+
+  // Use the fixed CAS base URL from server config.
+  const encodedService = encodeURIComponent(service)
+  const validateUrl = `${CAS_BASE}/serviceValidate?service=${encodedService}&ticket=${encodeURIComponent(
+    ticket
+  )}`
+
+  let resText = ''
+  try {
+    const response = await fetch(validateUrl);
+    resText = await response.text();
+    console.log(
+      `CAS validation response: status=${response.status}, ok=${response.ok}, length=${resText.length}`,
+    );
+
+    // If CAS returns a non-2xx response, surface a clearer error for debugging.
+    if (!response.ok) {
+      console.error(`CAS validation returned non-OK status: ${response.status}`);
+      return NextResponse.redirect(new URL(`/?auth=cas_status_${response.status}`, url));
+    }
+  } catch (e) {
+    console.error("Error fetching CAS validation:", e);
+    return NextResponse.redirect(new URL(`/?auth=error_fetching_cas`, url));
+  }
+  // Verify the CAS response contains an authentication success block before extracting the user
+  const successBlockMatch = resText.match(/<cas:authenticationSuccess\b[^>]*>([\s\S]*?)<\/cas:authenticationSuccess>/i)
+  if (!successBlockMatch) {
+    console.error("CAS response did not contain <cas:authenticationSuccess> block. Response snippet:", resText.slice(0, 200));
+    // Treat as invalid ticket (no authenticated user found)
+    return NextResponse.redirect(new URL('/?auth=invalid_ticket', url))
+  }
+
+  // Extract username only from within the authenticated block to avoid false positives in error HTML
+  const userMatch = successBlockMatch[1].match(/<cas:user[^>]*>([^<]+)<\/cas:user>/i)
+  if (!userMatch) {
+    console.error("CAS authenticationSuccess block missing <cas:user> element. Block snippet:", successBlockMatch[1].slice(0, 200));
+    return NextResponse.redirect(new URL('/?auth=invalid_ticket', url))
+  }
+
+  const username = userMatch[1].trim()
+
+  // Create JWT and set as HttpOnly cookie
+  const token = signAuthToken({ user: username })
+
+  const redirectRes = NextResponse.redirect(new URL('/', url))
+  // Secure cookie settings: HttpOnly, SameSite=Lax, Path=/, expire in 1 hour
+  redirectRes.cookies.set('auth', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60,
+  })
+
+  return redirectRes
+}

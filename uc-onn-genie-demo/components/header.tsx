@@ -1,12 +1,8 @@
-export default function Header() {
-  const CAS_LOGIN_URL = "https://login.uconn.edu/cas/login"
-  const SERVICE_URL = "http://localhost:3000"
+"use client";
 
-  const handleLogin = () => {
-    const redirectUrl =
-      `${CAS_LOGIN_URL}?service=${encodeURIComponent(SERVICE_URL)}`
-    window.location.href = redirectUrl
-  }
+import LogoutButton from "@/components/logout-button";
+
+export default function Header({ user }: { user: any }) {
 
   return (
     <header className="border-b border-border bg-primary text-primary-foreground">
@@ -16,17 +12,19 @@ export default function Header() {
             <h1 className="text-xl font-bold tracking-tight md:text-2xl">
               GENIE | UConn Macroeconomic World Model Demo
             </h1>
-            <p className="mt-1 text-sm opacity-90">Static prototype – using canned examples only.</p>
+            <p className="mt-1 text-sm opacity-90">
+              Static prototype – using canned examples only.
+            </p>
           </div>
 
-          <button
-            onClick={handleLogin}
-            className="rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground hover:opacity-90"
-          >
-            Log in
-          </button>
+          <div className="flex items-center gap-4 text-sm opacity-90">
+            <div>
+              Signed in as <span className="font-semibold">{user.user}</span>
+            </div>
+            <LogoutButton />
+          </div>
         </div>
       </div>
     </header>
-  )
+  );
 }
