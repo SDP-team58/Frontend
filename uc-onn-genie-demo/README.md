@@ -112,6 +112,11 @@ This project is for demo/development purposes. Please check with the repository 
 
 ## Running on VM
 Everything should be installed, to get to run:
+
 ssh -L 3000:localhost:3000 {NETID}@soc-sdp-58.grove.ad.uconn.edu  (In a separate terminal, this is port forwarding) 
-ssh {NETID}@soc-sdp-58.grove.ad.uconn.edu /and then/ npx next dev -H 0.0.0.0 -p 3000
+
+cd into app
+{NETID}@soc-sdp-58.grove.ad.uconn.edu
+npx next dev -H 0.0.0.0 -p 3000
+
 Visit http://localhost:3000/
