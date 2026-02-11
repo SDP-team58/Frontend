@@ -116,7 +116,7 @@ Everything should be installed, to get to run:
 ssh -L 3000:localhost:3000 {NETID}@soc-sdp-58.grove.ad.uconn.edu  (In a separate terminal, this is port forwarding) 
 
 cd into app
-{NETID}@soc-sdp-58.grove.ad.uconn.edu
+ssh {NETID}@soc-sdp-58.grove.ad.uconn.edu
 npx next dev -H 0.0.0.0 -p 3000
 
 Visit http://localhost:3000/
