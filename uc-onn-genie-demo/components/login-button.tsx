@@ -4,7 +4,8 @@ import { CAS_LOGIN } from "@/lib/config"
 
 export default function LoginButton({ className }: { className?: string }) {
   const handleLogin = () => {
-    const serviceUrl = `${window.location.origin}/api/cas`
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const serviceUrl = `${siteUrl}/api/cas` // callback endpoint
     const redirectUrl = `${CAS_LOGIN}?service=${encodeURIComponent(serviceUrl)}`
     window.location.href = redirectUrl
   }

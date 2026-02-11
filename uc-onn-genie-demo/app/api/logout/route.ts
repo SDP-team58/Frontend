@@ -10,7 +10,8 @@ export async function GET(req: Request) {
 
   // Build CAS logout URL. CAS typically supports a `service` param to return
   // the user after logout; use the app root as the return target.
-  const service = `${origin}/`
+  const baseUrl = process.env.SITE_URL || 'http://localhost:3000'
+  const service = `${baseUrl}/` // return target after CAS logout
   const logoutUrl = `${CAS_BASE}/logout?service=${encodeURIComponent(service)}`
 
   const res = NextResponse.redirect(new URL(logoutUrl))
