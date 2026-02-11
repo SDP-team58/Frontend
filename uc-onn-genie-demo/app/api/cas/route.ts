@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     )
   }
 
-  const baseUrl = process.env.SITE_URL || "http://localhost:3000"
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const service = `${baseUrl}${url.pathname}`
 
   const validateUrl = `${CAS_BASE}/serviceValidate?service=${encodeURIComponent(
