@@ -113,10 +113,10 @@ This project is for demo/development purposes. Please check with the repository 
 ## Running on VM
 Everything should be installed, to get to run:
 
--cd into app (uc-onn-genie-demo)
+- ssh {NETID}@soc-sdp-58.grove.ad.uconn.edu
+ 
+- cd into app (uc-onn-genie-demo)
 
--ssh {NETID}@soc-sdp-58.grove.ad.uconn.edu
-
--npx next dev -H 0.0.0.0 -p 3000 (nohup npx next dev -H 0.0.0.0 -p 3000 > output.log 2>&1 & to keep running)
+- npx next dev -H 0.0.0.0 -p 3000 (nohup npx next dev -H 0.0.0.0 -p 3000 > output.log 2>&1 & to keep running)
 
 - Visit http://137.99.22.90:3000/
