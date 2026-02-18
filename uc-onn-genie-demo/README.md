@@ -113,11 +113,10 @@ This project is for demo/development purposes. Please check with the repository 
 ## Running on VM
 Everything should be installed, to get to run:
 
-(In a separate terminal, this is port forwarding)
--ssh -L 3000:localhost:3000 {NETID}@soc-sdp-58.grove.ad.uconn.edu 
+- ssh {NETID}@soc-sdp-58.grove.ad.uconn.edu
+ 
+- cd frontend/Frontend/uc-onn-genie-demo
 
--cd into app
--ssh {NETID}@soc-sdp-58.grove.ad.uconn.edu
--npx next dev -H 0.0.0.0 -p 3000
+- npx next dev -H 0.0.0.0 -p 3000 (To persist: npm run build [and then] nohup npx next start -H 0.0.0.0 -p 3000 > output.log 2>&1)
 
-Visit http://localhost:3000/
+- Visit http://137.99.22.90:3000/
