@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   // Clear the `auth` cookie by setting an empty value and maxAge=0.
   res.cookies.set('auth', '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
