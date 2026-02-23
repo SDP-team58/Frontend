@@ -115,8 +115,10 @@ Everything should be installed, to get to run:
 
 - ssh {NETID}@soc-sdp-58.grove.ad.uconn.edu
  
-- cd frontend/Frontend/uc-onn-genie-demo
+- cd /srv/shared/Frontend/uc-onn-genie-demo
 
-- npx next dev -H 0.0.0.0 -p 3000 (To persist: npm run build [and then] nohup npx next start -H 0.0.0.0 -p 3000 > output.log 2>&1 &)
+- npx next dev -H 0.0.0.0 -p 3000
+
+- To persist: npm run build [and then] nohup npx next dev -H 0.0.0.0 -p 3000 > output.log 2>&1 &
 
 - Visit http://137.99.22.90:3000/
