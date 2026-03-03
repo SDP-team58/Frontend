@@ -2,10 +2,13 @@
 
 import type React from "react"
 
+import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import MessageBubble from "@/components/message-bubble"
-import { Send } from "lucide-react"
+import { Send, Calendar } from "lucide-react"
 
 interface Message {
   id: string
@@ -33,6 +36,21 @@ export default function ChatWindow({
   isLoading,
   chatEndRef,
 }: ChatWindowProps) {
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>()
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date)
+      const formattedDate = date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+      onInputChange(`Economic articles from ${formattedDate}`)
+      setShowDatePicker(false)
+    }
+  }
   return (
     <div className="flex flex-1 flex-col rounded-lg border border-border bg-card shadow-sm md:min-w-0">
       {/* Messages area */}
@@ -58,6 +76,14 @@ export default function ChatWindow({
       {/* Input area */}
       <div className="border-t border-border p-4 md:p-6">
         <div className="flex gap-3">
+          <Button
+            onClick={() => setShowDatePicker(true)}
+            disabled={isLoading}
+            size="icon"
+            variant="outline"
+          >
+            <Calendar className="h-4 w-4" />
+          </Button>
           <Input
             value={inputValue}
             onChange={(e) => onInputChange(e.target.value)}
@@ -72,6 +98,23 @@ export default function ChatWindow({
           </Button>
         </div>
       </div>
+
+      {/* Date Picker Dialog */}
+      <Dialog open={showDatePicker} onOpenChange={setShowDatePicker}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select a Date</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center">
+            <CalendarComponent
+              mode="single"
+              selected={selectedDate}
+              onSelect={handleDateSelect}
+              disabled={(date) => date > new Date()}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

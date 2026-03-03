@@ -15,6 +15,18 @@ interface Message {
   isLoading?: boolean
 }
 
+interface Article {
+  title: string
+  content: string
+  url: string
+}
+
+interface ArticleGroup {
+  id: string
+  date: string
+  articles: Article[]
+}
+
 export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -26,6 +38,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   ])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [articleGroups, setArticleGroups] = useState<ArticleGroup[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -69,6 +82,68 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     const userText = inputValue.trim()
     setInputValue("")
 
+    // Check if the message starts with "economic articles from"
+    if (userText.toLowerCase().startsWith("economic articles from")) {
+      // Add user message
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: userText,
+      }
+
+      setMessages((prev) => [...prev, userMessage])
+      setIsLoading(true)
+
+      // Extract date from the user text
+      const dateMatch = userText.match(/from\s+(.+)$/i)
+      const literalDate = dateMatch ? dateMatch[1] : "Today"
+
+      // Fetch articles from Tavily API with the literal date
+      fetch("/api/tavily", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `economic articles from ${literalDate}`,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          const fetchedArticles = data.articles || []
+
+          // Create an article group with all fetched articles
+          const articleGroup: ArticleGroup = {
+            id: Date.now().toString(),
+            date: literalDate,
+            articles: fetchedArticles.slice(0, 3), // Limit to 3 articles
+          }
+
+          setArticleGroups((prev) => [articleGroup, ...prev])
+
+          // Add assistant response
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: `Found ${Math.min(fetchedArticles.length, 3)} articles for "${literalDate}". Check the Elements panel on the left to view them.`,
+          }
+
+          setMessages((prev) => [...prev, assistantMessage])
+          setIsLoading(false)
+        })
+        .catch((error) => {
+          console.error("Error fetching articles:", error)
+          const errorMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: "Failed to fetch articles. Please try again.",
+          }
+          setMessages((prev) => [...prev, errorMessage])
+          setIsLoading(false)
+        })
+      return
+    }
+
     // Check if the message matches any scenario prompt
     const matchingScenario = scenarios.find((s) => s.prompt.toLowerCase() === userText.toLowerCase())
 
@@ -107,7 +182,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       <Header user={user} />
       <div className="flex flex-1 overflow-hidden gap-4 p-4 md:gap-6 md:p-6">
         {/* Left panel - Scenarios */}
-        <ScenarioPanel onScenarioClick={handleScenarioClick} />
+        <ScenarioPanel onScenarioClick={handleScenarioClick} articleGroups={articleGroups} />
 
         {/* Right panel - Chat */}
         <ChatWindow
