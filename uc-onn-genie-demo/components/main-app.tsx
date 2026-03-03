@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from "react"
 import Header from "@/components/header"
 import ScenarioPanel from "@/components/scenario-panel"
 import ChatWindow from "@/components/chat-window"
+import DevLog from "@/components/dev-log"
 import { scenarios } from "@/lib/scenarios"
 
 interface Message {
@@ -39,6 +40,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [articleGroups, setArticleGroups] = useState<ArticleGroup[]>([])
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -125,7 +127,10 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
           const assistantMessage: Message = {
             id: (Date.now() + 1).toString(),
             role: "assistant",
-            content: `Found ${Math.min(fetchedArticles.length, 3)} articles for "${literalDate}". Check the Elements panel on the left to view them.`,
+            content: `Found ${Math.min(
+              fetchedArticles.length,
+              3
+            )} articles for "${literalDate}". Check the Elements panel on the left to view them.`,
           }
 
           setMessages((prev) => [...prev, assistantMessage])
@@ -145,7 +150,9 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     }
 
     // Check if the message matches any scenario prompt
-    const matchingScenario = scenarios.find((s) => s.prompt.toLowerCase() === userText.toLowerCase())
+    const matchingScenario = scenarios.find(
+      (s) => s.prompt.toLowerCase() === userText.toLowerCase()
+    )
 
     if (!matchingScenario) {
       // Show error message
@@ -182,18 +189,26 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       <Header user={user} />
       <div className="flex flex-1 overflow-hidden gap-4 p-4 md:gap-6 md:p-6">
         {/* Left panel - Scenarios */}
-        <ScenarioPanel onScenarioClick={handleScenarioClick} articleGroups={articleGroups} />
-
-        {/* Right panel - Chat */}
-        <ChatWindow
-          messages={messages}
-          inputValue={inputValue}
-          onInputChange={setInputValue}
-          onSendMessage={handleSendMessage}
-          onKeyPress={handleKeyPress}
-          isLoading={isLoading}
-          chatEndRef={chatEndRef}
+        <ScenarioPanel
+          onScenarioClick={handleScenarioClick}
+          articleGroups={articleGroups}
+          onDateChange={setSelectedDate}
         />
+
+        {/* Right panel - Chat + Dev Log */}
+        <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+          <ChatWindow
+            messages={messages}
+            inputValue={inputValue}
+            onInputChange={setInputValue}
+            onSendMessage={handleSendMessage}
+            onKeyPress={handleKeyPress}
+            isLoading={isLoading}
+            chatEndRef={chatEndRef}
+          />
+
+          <DevLog selectedDate={selectedDate} />
+        </div>
       </div>
     </div>
   )
