@@ -98,19 +98,19 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       const dateMatch = userText.match(/from\s+(.+)$/i)
       const literalDate = dateMatch ? dateMatch[1] : "Today"
 
-      // Fetch articles from Tavily API with the literal date
-      fetch("/api/tavily", {
+      // Fetch backend response (Tavily articles with the date)
+      fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          query: `economic articles from ${literalDate}`,
+          user_message: `economic articles from ${literalDate}`,
         }),
       })
         .then((res) => res.json())
         .then((data) => {
-          const fetchedArticles = data.articles || []
+          const fetchedArticles = data.sources || []
 
           // Create an article group with all fetched articles
           const articleGroup: ArticleGroup = {
