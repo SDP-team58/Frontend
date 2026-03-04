@@ -117,7 +117,7 @@ export default function ScenarioPanel({ onScenarioClick, articleGroups = [] }: S
                             {article.title}
                             <ExternalLink className="h-3 w-3 flex-shrink-0" />
                           </a>
-                          <p className="text-xs text-muted-foreground mt-1">{article.content}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{article.content.slice(0,300)}...</p>
                         </div>
                       ))}
                     </div>
