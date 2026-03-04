@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useRef, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import Header from "@/components/header"
 import ScenarioPanel from "@/components/scenario-panel"
 import ChatWindow from "@/components/chat-window"
+import DevLog from "@/components/dev-log"
 import { scenarios } from "@/lib/scenarios"
 
 interface Message {
@@ -36,24 +36,70 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
         "Welcome to GENIE, UConn's Macroeconomic World Model. Select a scenario on the left to explore how different economic shocks impact the economy.",
     },
   ])
+
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [articleGroups, setArticleGroups] = useState<ArticleGroup[]>([])
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // Dev Log control
+  const [devLogOpen, setDevLogOpen] = useState(false)
+  const [devRunId, setDevRunId] = useState(0)
+
+  // Create a monotonic runId that we can reliably capture
+  const runCounterRef = useRef(0)
+
+  // Store what assistant response should be posted when dev log finishes
+  const pendingAssistantRef = useRef<{
+    runId: number
+    content: string
+  } | null>(null)
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
+  // Only auto-scroll when Dev Log is closed (prevents “layout jump” feeling)
   useEffect(() => {
+    if (devLogOpen) return
     scrollToBottom()
-  }, [messages])
+  }, [messages, devLogOpen])
+
+  const startDevRun = () => {
+    const next = ++runCounterRef.current
+    setDevRunId(next)
+
+    // Optional: auto-open dev log when a run starts
+    setDevLogOpen(true)
+
+    return next
+  }
+
+  const handleDevLogDone = (finishedRunId: number) => {
+    const pending = pendingAssistantRef.current
+    if (!pending) return
+    if (pending.runId !== finishedRunId) return
+
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: pending.content,
+      isLoading: false,
+    }
+
+    setMessages((prev) => [...prev, assistantMessage])
+    setIsLoading(false)
+    pendingAssistantRef.current = null
+  }
 
   const handleScenarioClick = (scenarioId: string) => {
     const scenario = scenarios.find((s) => s.id === scenarioId)
     if (!scenario) return
 
-    // Add user message
+    const runId = startDevRun()
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -63,110 +109,65 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     setMessages((prev) => [...prev, userMessage])
     setIsLoading(true)
 
-    // Simulate loading animation
-    setTimeout(() => {
-      const loadingMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: scenario.response,
-        isLoading: false,
-      }
-      setMessages((prev) => [...prev, loadingMessage])
-      setIsLoading(false)
-    }, 1500)
+    // Post assistant response ONLY when Dev Log finishes this runId
+    pendingAssistantRef.current = {
+      runId,
+      content: scenario.response,
+    }
   }
 
   const handleSendMessage = () => {
-    if (!inputValue.trim()) return
-
     const userText = inputValue.trim()
+    if (!userText) return
     setInputValue("")
 
-    // Check if the message starts with "economic articles from"
-    if (userText.toLowerCase().startsWith("economic articles from")) {
-      // Add user message
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: userText,
-      }
+    // Static demo: if user types exactly a scenario prompt, run it
+    const matchingScenario = scenarios.find(
+      (s) => s.prompt.toLowerCase() === userText.toLowerCase()
+    )
 
-      setMessages((prev) => [...prev, userMessage])
-      setIsLoading(true)
-
-      // Extract date from the user text
-      const dateMatch = userText.match(/from\s+(.+)$/i)
-      const literalDate = dateMatch ? dateMatch[1] : "Today"
-
-      // Fetch articles from Tavily API with the literal date
-      fetch("/api/tavily", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          query: `economic articles from ${literalDate}`,
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          const fetchedArticles = data.articles || []
-
-          // Create an article group with all fetched articles
-          const articleGroup: ArticleGroup = {
-            id: Date.now().toString(),
-            date: literalDate,
-            articles: fetchedArticles.slice(0, 3), // Limit to 3 articles
-          }
-
-          setArticleGroups((prev) => [articleGroup, ...prev])
-
-          // Add assistant response
-          const assistantMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: `Found ${Math.min(fetchedArticles.length, 3)} articles for "${literalDate}". Check the Elements panel on the left to view them.`,
-          }
-
-          setMessages((prev) => [...prev, assistantMessage])
-          setIsLoading(false)
-        })
-        .catch((error) => {
-          console.error("Error fetching articles:", error)
-          const errorMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: "Failed to fetch articles. Please try again.",
-          }
-          setMessages((prev) => [...prev, errorMessage])
-          setIsLoading(false)
-        })
-      return
+    // Add user message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: userText,
     }
+    setMessages((prev) => [...prev, userMessage])
 
-    // Check if the message matches any scenario prompt
-    const matchingScenario = scenarios.find((s) => s.prompt.toLowerCase() === userText.toLowerCase())
+    // === STATIC MODE ONLY TONIGHT ===
+    // Disable tavily command branch to avoid backend/api dependency.
+    // If you want it later, flip this flag.
+    const ENABLE_TAVILY_COMMAND = false
 
-    if (!matchingScenario) {
-      // Show error message
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: userText,
-      }
-
-      const errorMessage: Message = {
+    if (
+      ENABLE_TAVILY_COMMAND &&
+      userText.toLowerCase().startsWith("economic articles from")
+    ) {
+      // Keeping the structure here (but disabled)
+      setIsLoading(true)
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content:
-          "This demo only supports the preset scenarios on the left. Please choose one of those to see an example output.",
+          "Article fetching is disabled in static demo mode (tonight). Use the scenarios on the left.",
       }
-
-      setMessages((prev) => [...prev, userMessage, errorMessage])
+      setMessages((prev) => [...prev, assistantMessage])
+      setIsLoading(false)
       return
     }
 
-    // Valid scenario
+    if (!matchingScenario) {
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content:
+          "This demo is in static mode right now. Please choose one of the preset scenarios on the left to see an example output.",
+      }
+      setMessages((prev) => [...prev, assistantMessage])
+      return
+    }
+
+    // If it matches a scenario prompt, run the scenario flow
     handleScenarioClick(matchingScenario.id)
   }
 
@@ -180,20 +181,58 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   return (
     <div className="flex h-screen flex-col bg-background">
       <Header user={user} />
-      <div className="flex flex-1 overflow-hidden gap-4 p-4 md:gap-6 md:p-6">
-        {/* Left panel - Scenarios */}
-        <ScenarioPanel onScenarioClick={handleScenarioClick} articleGroups={articleGroups} />
 
-        {/* Right panel - Chat */}
-        <ChatWindow
-          messages={messages}
-          inputValue={inputValue}
-          onInputChange={setInputValue}
-          onSendMessage={handleSendMessage}
-          onKeyPress={handleKeyPress}
-          isLoading={isLoading}
-          chatEndRef={chatEndRef}
+      {/* Main split layout */}
+      <div className="flex flex-1 min-h-0 overflow-hidden gap-4 p-4 md:gap-6 md:p-6">
+        <ScenarioPanel
+          onScenarioClick={handleScenarioClick}
+          articleGroups={articleGroups}
+          onDateChange={setSelectedDate}
         />
+
+        {/* RIGHT COLUMN */}
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          {/* Chat area must be allowed to shrink; chat-window should manage its own scroll */}
+          <div className="flex-1 min-h-0">
+            <ChatWindow
+              messages={messages}
+              inputValue={inputValue}
+              onInputChange={setInputValue}
+              onSendMessage={handleSendMessage}
+              onKeyPress={handleKeyPress}
+              isLoading={isLoading}
+              chatEndRef={chatEndRef}
+            />
+          </div>
+
+          {/* Controls row */}
+          <div className="shrink-0 flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setDevLogOpen((v) => !v)}
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              {devLogOpen ? "Hide Dev Log" : "Show Dev Log"}
+            </button>
+          </div>
+
+          {/* Dev Log (mounted once; collapses without breaking layout) */}
+          <div
+            className={[
+              "shrink-0 overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out",
+              devLogOpen ? "max-h-[340px] opacity-100" : "max-h-0 opacity-0",
+            ].join(" ")}
+            aria-hidden={!devLogOpen}
+          >
+            <div className={devLogOpen ? "pt-2" : ""}>
+              <DevLog
+                selectedDate={selectedDate}
+                runId={devRunId}
+                onDone={handleDevLogDone}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
