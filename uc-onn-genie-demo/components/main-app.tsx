@@ -13,6 +13,7 @@ interface Message {
   role: "user" | "assistant"
   content: string
   isLoading?: boolean
+  validated?: boolean
 }
 
 interface Article {
@@ -134,25 +135,69 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     }
     setMessages((prev) => [...prev, userMessage])
 
-    // === STATIC MODE ONLY TONIGHT ===
-    // Disable tavily command branch to avoid backend/api dependency.
-    // If you want it later, flip this flag.
-    const ENABLE_TAVILY_COMMAND = false
-
-    if (
-      ENABLE_TAVILY_COMMAND &&
-      userText.toLowerCase().startsWith("economic articles from")
-    ) {
-      // Keeping the structure here (but disabled)
+    // Handle "Economics articles from {date}" command
+    if (userText.toLowerCase().startsWith("economics articles from")) {
       setIsLoading(true)
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "Article fetching is disabled in static demo mode (tonight). Use the scenarios on the left.",
-      }
-      setMessages((prev) => [...prev, assistantMessage])
-      setIsLoading(false)
+      
+      // Extract date and fetch articles
+      const dateStr = userText.replace(/^economics articles from\s*/i, '')
+      
+      // Call tavily API
+      fetch("/api/tavily", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: `Economics articles from ${dateStr}`,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          const articles = data.articles || []
+          
+          // Add to article groups
+          const newGroup: ArticleGroup = {
+            id: Date.now().toString(),
+            date: dateStr,
+            articles: articles,
+          }
+          
+          setArticleGroups((prev) => [...prev, newGroup])
+          
+          // Mark message as validated
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === userMessage.id ? { ...m, validated: true } : m
+            )
+          )
+          
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: `Found ${articles.length} economics articles from ${dateStr}. Check the "Economic Articles" tab in the sidebar.`,
+          }
+          setMessages((prev) => [...prev, assistantMessage])
+          setIsLoading(false)
+        })
+        .catch((error) => {
+          console.error("Error fetching articles:", error)
+          
+          // Mark message as validated even if request fails
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === userMessage.id ? { ...m, validated: true } : m
+            )
+          )
+          
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: "Unable to fetch articles. Please try again.",
+          }
+          setMessages((prev) => [...prev, assistantMessage])
+          setIsLoading(false)
+        })
       return
     }
 
@@ -187,7 +232,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
         <ScenarioPanel
           onScenarioClick={handleScenarioClick}
           articleGroups={articleGroups}
-          onDateChange={setSelectedDate}
         />
 
         {/* RIGHT COLUMN */}
@@ -202,6 +246,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
               onKeyPress={handleKeyPress}
               isLoading={isLoading}
               chatEndRef={chatEndRef}
+              onCalendarDateSelect={setSelectedDate}
             />
           </div>
 
