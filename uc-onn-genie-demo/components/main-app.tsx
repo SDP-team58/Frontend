@@ -46,7 +46,9 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([initialAssistantMessage])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedDate] = useState<Date | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [articles, setArticles] = useState<{title: string, content: string, url: string}[]>([])
+  const [articleQuery, setArticleQuery] = useState<string>("")
 
   const [chatHistory, setChatHistory] = useState<ChatThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
@@ -201,6 +203,30 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       return
     }
 
+    // Hard code check for economic articles from
+    if (userText.toLowerCase().startsWith("economic articles from")) {
+      setIsLoading(true)
+      setArticleQuery(userText)
+      fetch("/api/tavily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: userText }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          setArticles(data.articles || [])
+          setIsLoading(false)
+        })
+        .catch(() => setIsLoading(false))
+      const userMessage: Message = {
+        id: `${Date.now()}-user`,
+        role: "user",
+        content: userText,
+      }
+      setMessages((prev) => [...prev, userMessage])
+      return
+    }
+
     const userMessage: Message = {
       id: `${Date.now()}-user`,
       role: "user",
@@ -255,6 +281,36 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-3">
+            {/* Show articles as styled children, visible on hover. Title is clickable, children are smaller, no link at bottom. */}
+            {articleQuery && articles.length > 0 ? (
+              <div className="mb-4 group">
+                <div className="font-semibold text-sm mb-2 cursor-pointer capitalize">
+                  {articleQuery}
+                </div>
+                <div className="space-y-1 hidden group-hover:flex flex-col transition-all duration-200">
+                  {articles.map((a, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded border border-gray-200 bg-white shadow-sm px-1.5 py-0.5 flex flex-col gap-0.5 hover:bg-gray-50 transition-all duration-200"
+                    >
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener"
+                        className="font-medium text-xs capitalize mb-0.5 cursor-pointer text-gray-800 hover:underline"
+                        style={{ textDecoration: 'none' }}
+                      >
+                        {a.title}
+                      </a>
+                      <div className="text-xs text-gray-700 mb-0.5 capitalize">
+                        {a.content.slice(0, 120)}...
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {/* Existing chat history */}
             {chatHistory.length === 0 ? (
               <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
                 No chats yet. Start with one of the preset scenarios.
