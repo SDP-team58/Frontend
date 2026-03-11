@@ -21,6 +21,16 @@ interface ChatThread {
   messages: Message[]
 }
 
+interface AnalysisReply {
+  val_sp500_price: number,
+  val_oil_price: number,
+  val_us_treasury_10y: number,
+  val_vix_volatility: number,
+  nar_growth_regime: string
+  nar_policy_stance: string
+  nar_market_sentiment: string
+}
+
 const initialAssistantMessage: Message = {
   id: "1",
   role: "assistant",
@@ -74,7 +84,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
 
   const pendingAssistantRef = useRef<{
     runId: number
-    content: string
+    content: AnalysisReply | string
     threadId: string
   } | null>(null)
 
@@ -208,10 +218,20 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       })
   
       const data = await response.json()
+
+      const formattedReply = `
+        S&P 500 Price: $${data.reply.val_sp500_price}
+        Oil Price: $${data.reply.val_oil_price}
+        US Treasury 10Y Yield: ${data.reply.val_us_treasury_10y}%
+        VIX Volatility Index: ${data.reply.val_vix_volatility}
+        Growth Regime: ${data.reply.nar_growth_regime}
+        Policy Stance: ${data.reply.nar_policy_stance}
+        Market Sentiment: ${data.reply.nar_market_sentiment}
+      `.trim()
   
       pendingAssistantRef.current = {
         runId,
-        content: data.reply,
+        content: formattedReply,
         threadId,
       }
     } catch (err) {
