@@ -38,6 +38,20 @@ function formatThreadDate(dateString: string) {
   })
 }
 
+function buildDateRange(endDate: Date) {
+  const end = new Date(endDate)
+
+  const start = new Date(end)
+  start.setDate(start.getDate() - 14)
+
+  const format = (d: Date) => d.toISOString().split("T")[0]
+
+  return {
+    start_date: format(start),
+    end_date: format(end),
+  }
+}
+
 function buildPreview(text: string) {
   return text.length > 42 ? `${text.slice(0, 42)}...` : text
 }
@@ -46,7 +60,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([initialAssistantMessage])
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedDate] = useState<Date | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   const [chatHistory, setChatHistory] = useState<ChatThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
@@ -148,36 +162,66 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     pendingAssistantRef.current = null
   }
 
-  const handleScenarioClick = (scenarioId: string) => {
+  const handleScenarioClick = async (scenarioId: string) => {
     const scenario = scenarios.find((s) => s.id === scenarioId)
     if (!scenario) return
-
+  
     const runId = startDevRun()
-
+  
     const userMessage: Message = {
       id: `${Date.now()}-user`,
       role: "user",
       content: scenario.prompt,
     }
-
+  
     const threadId = `${Date.now()}-thread`
-
+  
     const newThread: ChatThread = {
       id: threadId,
       preview: buildPreview(scenario.prompt),
       createdAt: new Date().toISOString(),
       messages: [userMessage],
     }
-
+  
     setChatHistory((prev) => [newThread, ...prev])
     setActiveThreadId(threadId)
     setMessages([userMessage])
     setIsLoading(true)
-
-    pendingAssistantRef.current = {
-      runId,
-      content: scenario.response,
-      threadId,
+  
+    try {
+      let dateRange = null
+  
+      if (selectedDate) {
+        dateRange = buildDateRange(selectedDate)
+      }
+  
+      const response = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_message: scenario.prompt,
+          date_range_start: dateRange?.start_date,
+          date_range_end: dateRange?.end_date,
+        }),
+      })
+  
+      const data = await response.json()
+  
+      pendingAssistantRef.current = {
+        runId,
+        content: data.reply,
+        threadId,
+      }
+    } catch (err) {
+      console.error(err)
+  
+      pendingAssistantRef.current = {
+        runId,
+        content: "Error contacting backend.",
+        threadId,
+      }
     }
   }
 
