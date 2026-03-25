@@ -229,11 +229,21 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
         Market Sentiment: ${data.reply.nar_market_sentiment}
       `.trim()
   
-      pendingAssistantRef.current = {
-        runId,
+      const assistantMessage: Message = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
         content: formattedReply,
-        threadId,
-      }
+        isLoading: false,
+      };
+      setChatHistory((prev) =>
+        prev.map((thread) =>
+          thread.id === threadId
+            ? { ...thread, messages: [...thread.messages, assistantMessage] }
+            : thread
+        )
+      );
+      setMessages((prev) => [...prev, assistantMessage]);
+      setIsLoading(false);
     } catch (err) {
       console.error(err)
   
