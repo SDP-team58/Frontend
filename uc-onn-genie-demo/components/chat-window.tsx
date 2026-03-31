@@ -1,6 +1,7 @@
 "use client"
 
-import type React from "react"
+import React from "react"
+import { Calendar } from "@/components/ui/calendar"
 
 interface Message {
   id: string
@@ -30,6 +31,14 @@ export default function ChatWindow({
   starterPrompts?: string[]
   onStarterPromptClick?: (prompt: string) => void
 }) {
+  const [calendarOpen, setCalendarOpen] = React.useState(false)
+  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null)
+  const handleDateSelect = (date: Date) => {
+    setSelectedDate(date)
+    setCalendarOpen(false)
+    const formatted = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    onInputChange(`economic articles from ${formatted}`)
+  }
   return (
     <div className="flex h-full min-h-0 flex-col rounded-lg border bg-background">
       {/* Scrollable messages area */}
@@ -86,7 +95,7 @@ export default function ChatWindow({
 
       {/* Input row pinned to bottom */}
       <div className="shrink-0 border-t p-3">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <input
             value={inputValue}
             onChange={(e) => onInputChange(e.target.value)}
@@ -96,12 +105,29 @@ export default function ChatWindow({
           />
           <button
             type="button"
+            onClick={() => setCalendarOpen((v) => !v)}
+            className="rounded-md border border-border bg-background px-2 py-2 text-sm hover:bg-muted"
+            aria-label="Open calendar"
+          >
+            📅
+          </button>
+          <button
+            type="button"
             onClick={onSendMessage}
             className="rounded-md border border-border bg-background px-4 py-2 text-sm hover:bg-muted"
           >
             Send
           </button>
         </div>
+        {calendarOpen && (
+          <div className="absolute z-10 mt-2 bg-background border rounded-md shadow-lg">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={handleDateSelect}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
