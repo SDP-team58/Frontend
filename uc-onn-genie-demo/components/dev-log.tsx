@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 type LogLevel = "info" | "success" | "warning" | "error"
 
 type LogItem = {
-  t: string
+  time: string
   msg: string
   level: LogLevel
 }
@@ -19,6 +19,7 @@ export type StreamEvent = {
   type: LogLevel | "result"
   message: string
   data?: Record<string, unknown>
+  time: string
 }
 
 export type DevLogProps = {
@@ -83,8 +84,8 @@ export default function DevLog({
     }
   }, [])
 
-  const append = (msg: string, level: LogLevel) => {
-    setLogs((prev) => [...prev, { t: nowTime(), msg, level }])
+  const append = (msg: string, level: LogLevel, time?: string) => {
+    setLogs((prev) => [...prev, { time: time ?? nowTime(), msg, level }])
   }
 
   useEffect(() => {
@@ -148,12 +149,12 @@ export default function DevLog({
             if (activeRunRef.current !== thisRun) return
 
             if (event.type === "result") {
-              append(event.message, "success")
+              append(event.message, "success", event.time)
               if (event.data) onResult?.(thisRun, event.data)
               // result is the last event — break out
               break
             } else {
-              append(event.message, event.type as LogLevel)
+              append(event.message, event.type as LogLevel, event.time)
             }
           }
         }
@@ -190,7 +191,7 @@ export default function DevLog({
         ) : (
           logs.map((l, i) => (
             <div key={i} className="mb-1">
-              <span className="text-zinc-500">[{l.t}]&nbsp;</span>
+              <span className="text-zinc-500">[{l.time}]&nbsp;</span>
               <span
                 className={
                   l.level === "success"
