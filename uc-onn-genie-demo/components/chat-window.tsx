@@ -20,6 +20,10 @@ export default function ChatWindow({
   chatEndRef,
   starterPrompts = [],
   onStarterPromptClick,
+  mode,
+  onModeChange,
+  counterfactualText,
+  onCounterfactualTextChange,
 }: {
   messages: Message[]
   inputValue: string
@@ -27,13 +31,22 @@ export default function ChatWindow({
   onSendMessage: () => void
   onKeyPress: (e: React.KeyboardEvent<HTMLInputElement>) => void
   isLoading: boolean
-  chatEndRef: React.RefObject<HTMLDivElement>
+  chatEndRef: React.RefObject<HTMLDivElement | null>
   starterPrompts?: string[]
   onStarterPromptClick?: (prompt: string) => void
+  mode: "baseline" | "counterfactual"
+  onModeChange: (mode: "baseline" | "counterfactual") => void
+  counterfactualText: string
+  onCounterfactualTextChange: (value: string) => void
 }) {
   const [calendarOpen, setCalendarOpen] = React.useState(false)
-  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null)
-  const handleDateSelect = (date: Date) => {
+  const [selectedDate, setSelectedDate] = React.useState<Date | undefined>()
+  const counterfactualRequired =
+    mode === "counterfactual" && !counterfactualText.trim()
+  const sendDisabled = isLoading || !inputValue.trim() || counterfactualRequired
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return
     setSelectedDate(date)
     setCalendarOpen(false)
     const formatted = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -84,7 +97,8 @@ export default function ChatWindow({
                     ? onStarterPromptClick(prompt)
                     : onInputChange(prompt)
                 }
-                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted"
+                disabled={counterfactualRequired}
+                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {prompt}
               </button>
@@ -95,6 +109,29 @@ export default function ChatWindow({
 
       {/* Input row pinned to bottom */}
       <div className="shrink-0 border-t p-3">
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Forecast mode</span>
+            <select
+              value={mode}
+              onChange={(e) => onModeChange(e.target.value as "baseline" | "counterfactual")}
+              className="rounded-md border bg-background px-2 py-1 text-sm text-foreground outline-none"
+            >
+              <option value="baseline">Baseline</option>
+              <option value="counterfactual">Counterfactual</option>
+            </select>
+          </label>
+
+          {mode === "counterfactual" ? (
+            <input
+              value={counterfactualText}
+              onChange={(e) => onCounterfactualTextChange(e.target.value)}
+              placeholder="Scenario to assume is true..."
+              className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none"
+            />
+          ) : null}
+        </div>
+
         <div className="flex gap-2 items-center">
           <input
             value={inputValue}
@@ -114,7 +151,8 @@ export default function ChatWindow({
           <button
             type="button"
             onClick={onSendMessage}
-            className="rounded-md border border-border bg-background px-4 py-2 text-sm hover:bg-muted"
+            disabled={sendDisabled}
+            className="rounded-md border border-border bg-background px-4 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             Send
           </button>
