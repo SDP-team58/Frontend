@@ -36,16 +36,32 @@ export async function POST(req: Request) {
           date_range_end: body.date_range_end,
         }
 
-  const response = await fetch(`${backendBaseUrl}${endpoint}`, {
+  const upstream = await fetch(`${backendBaseUrl}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(upstreamBody),
     cache: "no-store",
+    // @ts-expect-error — Node 18 fetch needs this to stream large bodies
+    duplex: "half",
   })
 
-  const data = await response.json().catch(() => ({
-    error: "Failed to parse backend response.",
-  }))
+  if (!upstream.ok || !upstream.body) {
+    // Upstream failed before streaming started — return a plain JSON error
+    // so the client can handle it without trying to parse an SSE stream.
+    const errData = await upstream.json().catch(() => ({
+      error: "Backend unreachable.",
+    }))
+    return Response.json(errData, { status: upstream.status })
+  }
 
-  return Response.json(data, { status: response.status })
+  // Proxy the raw SSE byte stream straight through to the browser.
+  // No buffering, no JSON parsing — the client owns that responsibility.
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+    },
+  })
 }

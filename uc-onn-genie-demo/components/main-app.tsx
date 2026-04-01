@@ -4,8 +4,12 @@ import type React from "react"
 import { useEffect, useRef, useState } from "react"
 import Header from "@/components/header"
 import ChatWindow from "@/components/chat-window"
-import DevLog from "@/components/dev-log"
+import DevLog, { type StreamRequest } from "@/components/dev-log"
 import { scenarios } from "@/lib/scenarios"
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface Message {
   id: string
@@ -22,10 +26,10 @@ interface ChatThread {
 }
 
 interface AnalysisReply {
-  val_sp500_price: number,
-  val_oil_price: number,
-  val_us_treasury_10y: number,
-  val_vix_volatility: number,
+  val_sp500_price: number
+  val_oil_price: number
+  val_us_treasury_10y: number
+  val_vix_volatility: number
   nar_growth_regime: string
   nar_policy_stance: string
   nar_market_sentiment: string
@@ -40,6 +44,10 @@ interface BackendChatResponse {
 }
 
 type ChatMode = "baseline" | "counterfactual"
+
+// ---------------------------------------------------------------------------
+// Constants / helpers
+// ---------------------------------------------------------------------------
 
 const initialAssistantMessage: Message = {
   id: "1",
@@ -60,27 +68,20 @@ function formatThreadDate(dateString: string) {
 
 function buildDateRange(endDate: Date) {
   const end = new Date(endDate)
-
   const start = new Date(end)
   start.setDate(start.getDate() - 14)
-
   const format = (d: Date) => d.toISOString().split("T")[0]
-
-  return {
-    start_date: format(start),
-    end_date: format(end),
-  }
+  return { start_date: format(start), end_date: format(end) }
 }
 
 function buildPreview(text: string) {
   return text.length > 42 ? `${text.slice(0, 42)}...` : text
 }
 
-function formatAssistantContent(data: BackendChatResponse) {
+function formatAssistantContent(data: BackendChatResponse): string {
   if (!data.reply) {
-    return data.detail || data.error || "The backend returned an empty response."
+    return data.detail ?? data.error ?? "The backend returned an empty response."
   }
-
   return `
 S&P 500 Price: $${data.reply.val_sp500_price}
 Oil Price: $${data.reply.val_oil_price}
@@ -92,6 +93,10 @@ Market Sentiment: ${data.reply.nar_market_sentiment}
 `.trim()
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([initialAssistantMessage])
   const [inputValue, setInputValue] = useState("")
@@ -99,7 +104,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [counterfactualText, setCounterfactualText] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [articles, setArticles] = useState<{title: string, content: string, url: string}[]>([])
+  const [articles, setArticles] = useState<{ title: string; content: string; url: string }[]>([])
   const [articleQuery, setArticleQuery] = useState<string>("")
 
   const [chatHistory, setChatHistory] = useState<ChatThread[]>([])
@@ -110,16 +115,14 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
 
   const [devLogOpen, setDevLogOpen] = useState(false)
   const [devRunId, setDevRunId] = useState(0)
+  // The stream request that DevLog will consume for the current run
+  const [currentStreamRequest, setCurrentStreamRequest] = useState<StreamRequest | null>(null)
   const runCounterRef = useRef(0)
 
-  const pendingAssistantRef = useRef<{
-    runId: number
-    content: string
-    threadId: string
-  } | null>(null)
+  // Holds the thread context for the in-flight run so onResult can commit the message
+  const pendingThreadRef = useRef<{ runId: number; threadId: string } | null>(null)
 
   const starterPrompts = scenarios.slice(0, 4).map((s) => s.prompt)
-
   const showStarterPrompts =
     !activeThreadId &&
     messages.length === 1 &&
@@ -134,64 +137,40 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     scrollToBottom()
   }, [messages, devLogOpen])
 
-  const startDevRun = () => {
+  // ---------------------------------------------------------------------------
+  // Dev log orchestration
+  // ---------------------------------------------------------------------------
+
+  /** Increments the run counter, opens the dev log, and stores the stream request. */
+  const startDevRun = (req: StreamRequest): number => {
     const next = ++runCounterRef.current
     setDevRunId(next)
+    setCurrentStreamRequest(req)
     setDevLogOpen(true)
     return next
   }
 
-  const handleSelectThread = (threadId: string) => {
-    const thread = chatHistory.find((t) => t.id === threadId)
-    if (!thread) return
-
-    setOpenMenuThreadId(null)
-    setActiveThreadId(threadId)
-    setMessages(thread.messages)
-    setIsLoading(false)
-  }
-
-  const handleStartNewChat = () => {
-    setOpenMenuThreadId(null)
-    setActiveThreadId(null)
-    setMessages([initialAssistantMessage])
-    setIsLoading(false)
-    setInputValue("")
-  }
-
-  const handleDeleteThread = (threadId: string) => {
-    setChatHistory((prev) => prev.filter((thread) => thread.id !== threadId))
-    setOpenMenuThreadId(null)
-
-    if (activeThreadId === threadId) {
-      setActiveThreadId(null)
-      setMessages([initialAssistantMessage])
-      setIsLoading(false)
-      pendingAssistantRef.current = null
-    }
-  }
-
-  const handleDevLogDone = (finishedRunId: number) => {
-    const pending = pendingAssistantRef.current
-    if (!pending) return
-    if (pending.runId !== finishedRunId) return
+  /**
+   * Called by DevLog when the final "result" SSE event arrives.
+   * `data` is the raw ChatResponse payload from the backend.
+   */
+  const handleResult = (finishedRunId: number, data: Record<string, unknown>) => {
+    const pending = pendingThreadRef.current
+    if (!pending || pending.runId !== finishedRunId) return
 
     const assistantMessage: Message = {
       id: `${Date.now()}-assistant`,
       role: "assistant",
-      content: pending.content,
+      content: formatAssistantContent(data as BackendChatResponse),
       isLoading: false,
     }
 
     setChatHistory((prev) =>
       prev.map((thread) =>
         thread.id === pending.threadId
-          ? {
-              ...thread,
-              messages: [...thread.messages, assistantMessage],
-            }
-          : thread
-      )
+          ? { ...thread, messages: [...thread.messages, assistantMessage] }
+          : thread,
+      ),
     )
 
     if (activeThreadId === pending.threadId) {
@@ -199,87 +178,96 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     }
 
     setIsLoading(false)
-    pendingAssistantRef.current = null
+    pendingThreadRef.current = null
   }
 
-  const handleScenarioClick = async (scenarioId: string) => {
+  /**
+   * Called by DevLog when the stream closes (success or error).
+   * If no result was committed (e.g. stream errored), show a fallback message.
+   */
+  const handleDevLogDone = (finishedRunId: number) => {
+    const pending = pendingThreadRef.current
+    if (!pending || pending.runId !== finishedRunId) return
+
+    // Stream ended without a result event — emit an error message
+    const assistantMessage: Message = {
+      id: `${Date.now()}-assistant`,
+      role: "assistant",
+      content: "The pipeline encountered an error. Check the Dev Log for details.",
+      isLoading: false,
+    }
+
+    setChatHistory((prev) =>
+      prev.map((thread) =>
+        thread.id === pending.threadId
+          ? { ...thread, messages: [...thread.messages, assistantMessage] }
+          : thread,
+      ),
+    )
+
+    if (activeThreadId === pending.threadId) {
+      setMessages((prev) => [...prev, assistantMessage])
+    }
+
+    setIsLoading(false)
+    pendingThreadRef.current = null
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shared fetch setup
+  // ---------------------------------------------------------------------------
+
+  /** Builds the StreamRequest and wires up the pending thread ref. */
+  const _launchStream = (
+    userText: string,
+    threadId: string,
+    overrides: Partial<StreamRequest> = {},
+  ) => {
+    const dateRange = selectedDate ? buildDateRange(selectedDate) : null
+
+    const req: StreamRequest = {
+      mode: chatMode,
+      user_message: userText,
+      counterfactual_text:
+        chatMode === "counterfactual" ? counterfactualText.trim() : undefined,
+      date_range_start: dateRange?.start_date,
+      date_range_end: dateRange?.end_date,
+      ...overrides,
+    }
+
+    const runId = startDevRun(req)
+    pendingThreadRef.current = { runId, threadId }
+    return runId
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scenario click
+  // ---------------------------------------------------------------------------
+
+  const handleScenarioClick = (scenarioId: string) => {
     const scenario = scenarios.find((s) => s.id === scenarioId)
     if (!scenario) return
-  
-    const runId = startDevRun()
-  
+
     const userMessage: Message = {
       id: `${Date.now()}-user`,
       role: "user",
       content: scenario.prompt,
     }
-  
+
     const threadId = `${Date.now()}-thread`
-  
     const newThread: ChatThread = {
       id: threadId,
       preview: buildPreview(scenario.prompt),
       createdAt: new Date().toISOString(),
       messages: [userMessage],
     }
-  
+
     setChatHistory((prev) => [newThread, ...prev])
     setActiveThreadId(threadId)
     setMessages([userMessage])
     setIsLoading(true)
-  
-    try {
-      let dateRange = null
-  
-      if (selectedDate) {
-        dateRange = buildDateRange(selectedDate)
-      }
-  
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mode: chatMode,
-          user_message: scenario.prompt,
-          counterfactual_text:
-            chatMode === "counterfactual" ? counterfactualText.trim() : undefined,
-          date_range_start: dateRange?.start_date,
-          date_range_end: dateRange?.end_date,
-        }),
-      })
-  
-      const data = (await response.json()) as BackendChatResponse
 
-      if (!response.ok) {
-        throw new Error(data.detail || data.error || "The backend request failed.")
-      }
-  
-      const assistantMessage: Message = {
-        id: `${Date.now()}-assistant`,
-        role: "assistant",
-        content: formatAssistantContent(data),
-        isLoading: false,
-      };
-      setChatHistory((prev) =>
-        prev.map((thread) =>
-          thread.id === threadId
-            ? { ...thread, messages: [...thread.messages, assistantMessage] }
-            : thread
-        )
-      );
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsLoading(false);
-    } catch (err) {
-      console.error(err)
-  
-      pendingAssistantRef.current = {
-        runId,
-        content: "Error contacting backend.",
-        threadId,
-      }
-    }
+    _launchStream(scenario.prompt, threadId)
   }
 
   const handleStarterPromptClick = (prompt: string) => {
@@ -288,6 +276,10 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     handleScenarioClick(scenario.id)
   }
 
+  // ---------------------------------------------------------------------------
+  // Free-text send
+  // ---------------------------------------------------------------------------
+
   const handleSendMessage = async () => {
     const userText = inputValue.trim()
     if (!userText) return
@@ -295,15 +287,14 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     setInputValue("")
 
     const matchingScenario = scenarios.find(
-      (s) => s.prompt.toLowerCase() === userText.toLowerCase()
+      (s) => s.prompt.toLowerCase() === userText.toLowerCase(),
     )
-
     if (matchingScenario) {
       handleScenarioClick(matchingScenario.id)
       return
     }
 
-    // Hard code check for economic articles from
+    // Special-case: article search (non-streaming)
     if (userText.toLowerCase().startsWith("economic articles from")) {
       setIsLoading(true)
       setArticleQuery(userText)
@@ -314,7 +305,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       })
         .then((res) => res.json())
         .then((data) => {
-          setArticles(data.articles || [])
+          setArticles(data.articles ?? [])
           setIsLoading(false)
         })
         .catch(() => setIsLoading(false))
@@ -334,7 +325,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     }
 
     const threadId = `${Date.now()}-thread`
-
     const newThread: ChatThread = {
       id: threadId,
       preview: buildPreview(userText),
@@ -347,73 +337,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     setMessages([userMessage])
     setIsLoading(true)
 
-    try {
-      let dateRange = null
-
-      if (selectedDate) {
-        dateRange = buildDateRange(selectedDate)
-      }
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: chatMode,
-          user_message: userText,
-          counterfactual_text:
-            chatMode === "counterfactual" ? counterfactualText.trim() : undefined,
-          date_range_start: dateRange?.start_date,
-          date_range_end: dateRange?.end_date,
-        }),
-      })
-
-      const data = (await response.json()) as BackendChatResponse
-
-      if (!response.ok) {
-        throw new Error(data.detail || data.error || "The backend request failed.")
-      }
-
-      const assistantMessage: Message = {
-        id: `${Date.now()}-assistant`,
-        role: "assistant",
-        content: formatAssistantContent(data),
-      }
-
-      setChatHistory((prev) =>
-        prev.map((thread) =>
-          thread.id === threadId
-            ? {
-                ...thread,
-                messages: [...thread.messages, assistantMessage],
-              }
-            : thread
-        )
-      )
-      setMessages([userMessage, assistantMessage])
-    } catch (error) {
-      const assistantMessage: Message = {
-        id: `${Date.now()}-assistant`,
-        role: "assistant",
-        content:
-          error instanceof Error
-            ? `Request failed: ${error.message}`
-            : "Request failed. Please try again.",
-      }
-
-      setChatHistory((prev) =>
-        prev.map((thread) =>
-          thread.id === threadId
-            ? {
-                ...thread,
-                messages: [...thread.messages, assistantMessage],
-              }
-            : thread
-        )
-      )
-      setMessages([userMessage, assistantMessage])
-    } finally {
-      setIsLoading(false)
-    }
+    _launchStream(userText, threadId)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -422,6 +346,42 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       handleSendMessage()
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Thread management
+  // ---------------------------------------------------------------------------
+
+  const handleSelectThread = (threadId: string) => {
+    const thread = chatHistory.find((t) => t.id === threadId)
+    if (!thread) return
+    setOpenMenuThreadId(null)
+    setActiveThreadId(threadId)
+    setMessages(thread.messages)
+    setIsLoading(false)
+  }
+
+  const handleStartNewChat = () => {
+    setOpenMenuThreadId(null)
+    setActiveThreadId(null)
+    setMessages([initialAssistantMessage])
+    setIsLoading(false)
+    setInputValue("")
+  }
+
+  const handleDeleteThread = (threadId: string) => {
+    setChatHistory((prev) => prev.filter((thread) => thread.id !== threadId))
+    setOpenMenuThreadId(null)
+    if (activeThreadId === threadId) {
+      setActiveThreadId(null)
+      setMessages([initialAssistantMessage])
+      setIsLoading(false)
+      pendingThreadRef.current = null
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -442,7 +402,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-3">
-            {/* Show articles as styled children, visible on hover. Title is clickable, children are smaller, no link at bottom. */}
             {articleQuery && articles.length > 0 ? (
               <div className="mb-4 group">
                 <div className="font-semibold text-sm mb-2 cursor-pointer capitalize">
@@ -459,7 +418,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                         target="_blank"
                         rel="noopener"
                         className="font-medium text-xs capitalize mb-0.5 cursor-pointer text-gray-800 hover:underline"
-                        style={{ textDecoration: 'none' }}
+                        style={{ textDecoration: "none" }}
                       >
                         {a.title}
                       </a>
@@ -471,7 +430,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                 </div>
               </div>
             ) : null}
-            {/* Existing chat history */}
+
             {chatHistory.length === 0 ? (
               <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
                 No chats yet. Start with one of the preset scenarios.
@@ -501,7 +460,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                       type="button"
                       onClick={() =>
                         setOpenMenuThreadId((prev) =>
-                          prev === thread.id ? null : thread.id
+                          prev === thread.id ? null : thread.id,
                         )
                       }
                       className="absolute right-2 top-2 rounded px-2 py-1 text-sm text-muted-foreground opacity-0 transition hover:bg-background group-hover:opacity-100"
@@ -569,6 +528,8 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
               <DevLog
                 selectedDate={selectedDate}
                 runId={devRunId}
+                streamRequest={currentStreamRequest}
+                onResult={handleResult}
                 onDone={handleDevLogDone}
               />
             </div>
