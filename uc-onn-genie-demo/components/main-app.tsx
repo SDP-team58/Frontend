@@ -21,6 +21,16 @@ interface ChatThread {
   messages: Message[]
 }
 
+interface BackendChatResponse {
+  reply?: Record<string, unknown>
+  sources?: string[]
+  financial_data?: Record<string, unknown> | null
+  error?: string
+  detail?: string
+}
+
+type ChatMode = "baseline" | "counterfactual"
+
 const initialAssistantMessage: Message = {
   id: "1",
   role: "assistant",
@@ -42,9 +52,29 @@ function buildPreview(text: string) {
   return text.length > 42 ? `${text.slice(0, 42)}...` : text
 }
 
+function formatAssistantContent(data: BackendChatResponse) {
+  const sections: string[] = []
+
+  if (data.reply) {
+    sections.push(JSON.stringify(data.reply, null, 2))
+  }
+
+  if (data.financial_data) {
+    sections.push(`Market snapshot:\n${JSON.stringify(data.financial_data, null, 2)}`)
+  }
+
+  if (data.sources?.length) {
+    sections.push(`Sources:\n${data.sources.map((source) => `- ${source}`).join("\n")}`)
+  }
+
+  return sections.join("\n\n") || "The backend returned an empty response."
+}
+
 export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([initialAssistantMessage])
   const [inputValue, setInputValue] = useState("")
+  const [chatMode, setChatMode] = useState<ChatMode>("baseline")
+  const [counterfactualText, setCounterfactualText] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [articles, setArticles] = useState<{title: string, content: string, url: string}[]>([])
@@ -189,19 +219,11 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     handleScenarioClick(scenario.id)
   }
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     const userText = inputValue.trim()
     if (!userText) return
+    if (chatMode === "counterfactual" && !counterfactualText.trim()) return
     setInputValue("")
-
-    const matchingScenario = scenarios.find(
-      (s) => s.prompt.toLowerCase() === userText.toLowerCase()
-    )
-
-    if (matchingScenario) {
-      handleScenarioClick(matchingScenario.id)
-      return
-    }
 
     // Hard code check for economic articles from
     if (userText.toLowerCase().startsWith("economic articles from")) {
@@ -233,26 +255,79 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       content: userText,
     }
 
-    const assistantMessage: Message = {
-      id: `${Date.now()}-assistant`,
-      role: "assistant",
-      content:
-        "This demo is in static mode right now. Please choose one of the preset scenarios to see an example output.",
-    }
-
     const threadId = `${Date.now()}-thread`
 
     const newThread: ChatThread = {
       id: threadId,
       preview: buildPreview(userText),
       createdAt: new Date().toISOString(),
-      messages: [userMessage, assistantMessage],
+      messages: [userMessage],
     }
 
     setChatHistory((prev) => [newThread, ...prev])
     setActiveThreadId(threadId)
-    setMessages([userMessage, assistantMessage])
-    setIsLoading(false)
+    setMessages([userMessage])
+    setIsLoading(true)
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: chatMode,
+          user_message: userText,
+          counterfactual_text:
+            chatMode === "counterfactual" ? counterfactualText.trim() : undefined,
+        }),
+      })
+
+      const data = (await response.json()) as BackendChatResponse
+
+      if (!response.ok) {
+        throw new Error(data.detail || data.error || "The backend request failed.")
+      }
+
+      const assistantMessage: Message = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        content: formatAssistantContent(data),
+      }
+
+      setChatHistory((prev) =>
+        prev.map((thread) =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                messages: [...thread.messages, assistantMessage],
+              }
+            : thread
+        )
+      )
+      setMessages([userMessage, assistantMessage])
+    } catch (error) {
+      const assistantMessage: Message = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        content:
+          error instanceof Error
+            ? `Request failed: ${error.message}`
+            : "Request failed. Please try again.",
+      }
+
+      setChatHistory((prev) =>
+        prev.map((thread) =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                messages: [...thread.messages, assistantMessage],
+              }
+            : thread
+        )
+      )
+      setMessages([userMessage, assistantMessage])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -380,6 +455,10 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
               chatEndRef={chatEndRef}
               starterPrompts={showStarterPrompts ? starterPrompts : []}
               onStarterPromptClick={handleStarterPromptClick}
+              mode={chatMode}
+              onModeChange={setChatMode}
+              counterfactualText={counterfactualText}
+              onCounterfactualTextChange={setCounterfactualText}
             />
           </div>
 
