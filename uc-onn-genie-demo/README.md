@@ -99,7 +99,8 @@ NEXT_API_BASE_URL=http://your-fastapi-vm:8000
 - `app/api/chat/route.ts` proxies frontend chat requests to the FastAPI backend.
 - Baseline requests are forwarded to `/chat`.
 - Counterfactual requests are forwarded to `/chat/counterfactual`.
-- Set `NEXT_API_BASE_URL` in `.env.local` to the FastAPI VM host or IP so the Next.js app can reach the backend.
+- If `NEXT_API_BASE_URL` is unset, the frontend automatically targets the current VM host on port `8000`.
+- Set `NEXT_API_BASE_URL` only if you need to override that default and point at a different FastAPI host.
 
 Notes:
 

@@ -8,15 +8,29 @@ type ChatProxyRequest = {
   date_range_end?: string
 }
 
-export async function POST(req: Request) {
-  const backendBaseUrl = process.env.NEXT_API_BASE_URL
-
-  if (!backendBaseUrl) {
-    return Response.json(
-      { error: "NEXT_API_BASE_URL is not configured." },
-      { status: 500 },
-    )
+function resolveBackendBaseUrl(req: Request) {
+  const configured = process.env.NEXT_API_BASE_URL?.trim()
+  if (configured) {
+    return configured.replace(/\/+$/, "")
   }
+
+  const requestUrl = new URL(req.url)
+  const forwardedProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim()
+  const forwardedHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
+  const host = forwardedHost || req.headers.get("host") || requestUrl.host
+  const protocol = (forwardedProto || requestUrl.protocol).replace(/:$/, "")
+
+  const backendUrl = new URL(`${protocol}://${host}`)
+  backendUrl.port = "8000"
+  backendUrl.pathname = ""
+  backendUrl.search = ""
+  backendUrl.hash = ""
+
+  return backendUrl.toString().replace(/\/+$/, "")
+}
+
+export async function POST(req: Request) {
+  const backendBaseUrl = resolveBackendBaseUrl(req)
 
   const body = (await req.json()) as ChatProxyRequest
   const mode: ChatMode = body.mode === "counterfactual" ? "counterfactual" : "baseline"
