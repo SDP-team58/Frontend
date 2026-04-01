@@ -205,6 +205,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const handleScenarioClick = async (scenarioId: string) => {
     const scenario = scenarios.find((s) => s.id === scenarioId)
     if (!scenario) return
+    if (chatMode === "counterfactual" && !counterfactualText.trim()) return
   
     const runId = startDevRun()
   

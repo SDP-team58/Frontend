@@ -41,10 +41,9 @@ export default function ChatWindow({
 }) {
   const [calendarOpen, setCalendarOpen] = React.useState(false)
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>()
-  const sendDisabled =
-    isLoading ||
-    !inputValue.trim() ||
-    (mode === "counterfactual" && !counterfactualText.trim())
+  const counterfactualRequired =
+    mode === "counterfactual" && !counterfactualText.trim()
+  const sendDisabled = isLoading || !inputValue.trim() || counterfactualRequired
 
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return
@@ -98,7 +97,8 @@ export default function ChatWindow({
                     ? onStarterPromptClick(prompt)
                     : onInputChange(prompt)
                 }
-                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted"
+                disabled={counterfactualRequired}
+                className="rounded-full border border-border bg-background px-3 py-1.5 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {prompt}
               </button>
