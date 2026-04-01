@@ -91,7 +91,15 @@ Environment variables to set in your environment (e.g. `.env.local`):
 
 ```
 JWT_SECRET=replace-with-a-strong-secret
+NEXT_API_BASE_URL=http://your-fastapi-vm:8000
 ```
+
+## FastAPI Chat Integration
+
+- `app/api/chat/route.ts` proxies frontend chat requests to the FastAPI backend.
+- Baseline requests are forwarded to `/chat`.
+- Counterfactual requests are forwarded to `/chat/counterfactual`.
+- Set `NEXT_API_BASE_URL` in `.env.local` to the FastAPI VM host or IP so the Next.js app can reach the backend.
 
 Notes:
 
