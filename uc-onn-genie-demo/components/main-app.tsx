@@ -73,6 +73,8 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [articles, setArticles] = useState<{title: string, content: string, url: string}[]>([])
   const [articleQuery, setArticleQuery] = useState<string>("")
+  const [chatMode, setChatMode] = useState<"baseline" | "counterfactual">("baseline")
+  const [counterfactualText, setCounterfactualText] = useState("")
 
   const [chatHistory, setChatHistory] = useState<ChatThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
@@ -207,13 +209,18 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
         dateRange = buildDateRange(selectedDate)
       }
   
-      const response = await fetch("http://localhost:8000/chat", {
+      const endpoint = chatMode === "counterfactual" 
+        ? "http://localhost:8000/chat/counterfactual" 
+        : "http://localhost:8000/chat"
+      
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           user_message: scenario.prompt,
+          counterfactual_text: chatMode === "counterfactual" ? counterfactualText.trim() : undefined,
           date_range_start: dateRange?.start_date,
           date_range_end: dateRange?.end_date,
         }),
@@ -454,6 +461,12 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
               chatEndRef={chatEndRef}
               starterPrompts={showStarterPrompts ? starterPrompts : []}
               onStarterPromptClick={handleStarterPromptClick}
+              selectedDate={selectedDate}
+              onSelectedDateChange={setSelectedDate}
+              chatMode={chatMode}
+              onChatModeChange={setChatMode}
+              counterfactualText={counterfactualText}
+              onCounterfactualTextChange={setCounterfactualText}
             />
           </div>
 

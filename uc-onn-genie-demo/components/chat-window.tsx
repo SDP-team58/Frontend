@@ -20,6 +20,12 @@ export default function ChatWindow({
   chatEndRef,
   starterPrompts = [],
   onStarterPromptClick,
+  selectedDate,
+  onSelectedDateChange,
+  chatMode,
+  onChatModeChange,
+  counterfactualText,
+  onCounterfactualTextChange,
 }: {
   messages: Message[]
   inputValue: string
@@ -30,11 +36,16 @@ export default function ChatWindow({
   chatEndRef: React.RefObject<HTMLDivElement>
   starterPrompts?: string[]
   onStarterPromptClick?: (prompt: string) => void
+  selectedDate: Date | null
+  onSelectedDateChange: (date: Date | null) => void
+  chatMode: "baseline" | "counterfactual"
+  onChatModeChange: (mode: "baseline" | "counterfactual") => void
+  counterfactualText: string
+  onCounterfactualTextChange: (text: string) => void
 }) {
   const [calendarOpen, setCalendarOpen] = React.useState(false)
-  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null)
   const handleDateSelect = (date: Date) => {
-    setSelectedDate(date)
+    onSelectedDateChange(date)
     setCalendarOpen(false)
     const formatted = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     onInputChange(`economic articles from ${formatted}`)
@@ -93,6 +104,56 @@ export default function ChatWindow({
         </div>
       ) : null}
 
+      {/* Mode selector and counterfactual text input */}
+      <div className="shrink-0 border-t px-3 py-3 space-y-3">
+        <div>
+          <div className="mb-2 text-xs font-medium text-muted-foreground">
+            Mode
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onChatModeChange("baseline")}
+              className={[
+                "flex-1 rounded-md border px-3 py-2 text-xs font-medium transition",
+                chatMode === "baseline"
+                  ? "border-border bg-muted"
+                  : "border-border bg-background hover:bg-muted"
+              ].join(" ")}
+            >
+              Baseline
+            </button>
+            <button
+              type="button"
+              onClick={() => onChatModeChange("counterfactual")}
+              className={[
+                "flex-1 rounded-md border px-3 py-2 text-xs font-medium transition",
+                chatMode === "counterfactual"
+                  ? "border-border bg-muted"
+                  : "border-border bg-background hover:bg-muted"
+              ].join(" ")}
+            >
+              Counterfactual
+            </button>
+          </div>
+        </div>
+
+        {chatMode === "counterfactual" && (
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">
+              Counterfactual scenario
+            </label>
+            <textarea
+              value={counterfactualText}
+              onChange={(e) => onCounterfactualTextChange(e.target.value)}
+              placeholder="Describe the counterfactual scenario..."
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none resize-none"
+              rows={3}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Input row pinned to bottom */}
       <div className="shrink-0 border-t p-3">
         <div className="flex gap-2 items-center">
@@ -114,7 +175,13 @@ export default function ChatWindow({
           <button
             type="button"
             onClick={onSendMessage}
-            className="rounded-md border border-border bg-background px-4 py-2 text-sm hover:bg-muted"
+            disabled={chatMode === "counterfactual" && !counterfactualText.trim()}
+            className={[
+              "rounded-md border border-border px-4 py-2 text-sm",
+              chatMode === "counterfactual" && !counterfactualText.trim()
+                ? "bg-background text-muted-foreground cursor-not-allowed opacity-50"
+                : "bg-background hover:bg-muted"
+            ].join(" ")}
           >
             Send
           </button>
@@ -123,7 +190,7 @@ export default function ChatWindow({
           <div className="absolute z-10 mt-2 bg-background border rounded-md shadow-lg">
             <Calendar
               mode="single"
-              selected={selectedDate}
+              selected={selectedDate || undefined}
               onSelect={handleDateSelect}
             />
           </div>
