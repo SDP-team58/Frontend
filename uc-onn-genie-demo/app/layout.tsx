@@ -5,13 +5,13 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" })
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
 
 export const metadata: Metadata = {
   // <CHANGE> updated title and description for GENIE app
   title: "GENIE | UConn Macroeconomic World Model",
-  description: "Interactive demo of the GENIE macroeconomic model with preset economic scenarios",
+  description: "Interactive demo of the GENIE macroeconomic model with date-based baseline and counterfactual analysis",
   generator: "v0.app",
   icons: {
     icon: [
@@ -39,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`font-sans antialiased`}>
+      <body className={`${geist.variable} ${geistMono.variable} font-sans antialiased`}>
         {children}
         <Analytics />
       </body>

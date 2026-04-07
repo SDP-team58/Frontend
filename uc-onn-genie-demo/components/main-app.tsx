@@ -1,17 +1,14 @@
 "use client"
 
-import type React from "react"
 import { useEffect, useRef, useState } from "react"
-import Header from "@/components/header"
+
 import ChatWindow from "@/components/chat-window"
-import DevLog from "@/components/dev-log"
-import { scenarios } from "@/lib/scenarios"
+import Header from "@/components/header"
 
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
-  isLoading?: boolean
 }
 
 interface ChatThread {
@@ -22,10 +19,10 @@ interface ChatThread {
 }
 
 interface AnalysisReply {
-  val_sp500_price: number,
-  val_oil_price: number,
-  val_us_treasury_10y: number,
-  val_vix_volatility: number,
+  val_sp500_price: number
+  val_oil_price: number
+  val_us_treasury_10y: number
+  val_vix_volatility: number
   nar_growth_regime: string
   nar_policy_stance: string
   nar_market_sentiment: string
@@ -35,7 +32,7 @@ const initialAssistantMessage: Message = {
   id: "1",
   role: "assistant",
   content:
-    "Welcome to GENIE, UConn's Macroeconomic World Model. Select a scenario below to explore how different economic shocks impact the economy.",
+    "Select a date to run the baseline analysis. Switch to counterfactual mode if you want to add a counterfactual overlay.",
 }
 
 function formatThreadDate(dateString: string) {
@@ -48,9 +45,16 @@ function formatThreadDate(dateString: string) {
   })
 }
 
+function formatDisplayDate(date: Date) {
+  return date.toLocaleDateString([], {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+}
+
 function buildDateRange(endDate: Date) {
   const end = new Date(endDate)
-
   const start = new Date(end)
   start.setDate(start.getDate() - 14)
 
@@ -66,54 +70,45 @@ function buildPreview(text: string) {
   return text.length > 42 ? `${text.slice(0, 42)}...` : text
 }
 
+function formatAnalysisReply(reply: AnalysisReply) {
+  return `
+    S&P 500 Price: $${reply.val_sp500_price}
+    Oil Price: $${reply.val_oil_price}
+    US Treasury 10Y Yield: ${reply.val_us_treasury_10y}%
+    VIX Volatility Index: ${reply.val_vix_volatility}
+    Growth Regime: ${reply.nar_growth_regime}
+    Policy Stance: ${reply.nar_policy_stance}
+    Market Sentiment: ${reply.nar_market_sentiment}
+  `.trim()
+}
+
+function buildRequestSummary(
+  selectedDate: Date,
+  chatMode: "baseline" | "counterfactual",
+  counterfactualText: string
+) {
+  const dateLabel = formatDisplayDate(selectedDate)
+  if (chatMode === "counterfactual") {
+    return `Counterfactual analysis for ${dateLabel}\nScenario: ${counterfactualText.trim()}`
+  }
+  return `Baseline analysis for ${dateLabel}`
+}
+
 export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([initialAssistantMessage])
-  const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [articles, setArticles] = useState<{title: string, content: string, url: string}[]>([])
-  const [articleQuery, setArticleQuery] = useState<string>("")
   const [chatMode, setChatMode] = useState<"baseline" | "counterfactual">("baseline")
   const [counterfactualText, setCounterfactualText] = useState("")
-
   const [chatHistory, setChatHistory] = useState<ChatThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
   const [openMenuThreadId, setOpenMenuThreadId] = useState<string | null>(null)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  const [devLogOpen, setDevLogOpen] = useState(false)
-  const [devRunId, setDevRunId] = useState(0)
-  const runCounterRef = useRef(0)
-
-  const pendingAssistantRef = useRef<{
-    runId: number
-    content: AnalysisReply | string
-    threadId: string
-  } | null>(null)
-
-  const starterPrompts = scenarios.slice(0, 4).map((s) => s.prompt)
-
-  const showStarterPrompts =
-    !activeThreadId &&
-    messages.length === 1 &&
-    messages[0]?.id === initialAssistantMessage.id
-
-  const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
   useEffect(() => {
-    if (devLogOpen) return
-    scrollToBottom()
-  }, [messages, devLogOpen])
-
-  const startDevRun = () => {
-    const next = ++runCounterRef.current
-    setDevRunId(next)
-    setDevLogOpen(true)
-    return next
-  }
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
   const handleSelectThread = (threadId: string) => {
     const thread = chatHistory.find((t) => t.id === threadId)
@@ -130,7 +125,9 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     setActiveThreadId(null)
     setMessages([initialAssistantMessage])
     setIsLoading(false)
-    setInputValue("")
+    setSelectedDate(null)
+    setChatMode("baseline")
+    setCounterfactualText("")
   }
 
   const handleDeleteThread = (threadId: string) => {
@@ -141,205 +138,102 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       setActiveThreadId(null)
       setMessages([initialAssistantMessage])
       setIsLoading(false)
-      pendingAssistantRef.current = null
     }
   }
 
-  const handleDevLogDone = (finishedRunId: number) => {
-    const pending = pendingAssistantRef.current
-    if (!pending) return
-    if (pending.runId !== finishedRunId) return
+  const sendBackendMessage = async () => {
+    if (!selectedDate) return
+    if (chatMode === "counterfactual" && !counterfactualText.trim()) return
 
-    const assistantMessage: Message = {
-      id: `${Date.now()}-assistant`,
-      role: "assistant",
-      content: pending.content,
-      isLoading: false,
-    }
-
-    setChatHistory((prev) =>
-      prev.map((thread) =>
-        thread.id === pending.threadId
-          ? {
-              ...thread,
-              messages: [...thread.messages, assistantMessage],
-            }
-          : thread
-      )
-    )
-
-    if (activeThreadId === pending.threadId) {
-      setMessages((prev) => [...prev, assistantMessage])
-    }
-
-    setIsLoading(false)
-    pendingAssistantRef.current = null
-  }
-
-  const handleScenarioClick = async (scenarioId: string) => {
-    const scenario = scenarios.find((s) => s.id === scenarioId)
-    if (!scenario) return
-  
-    const runId = startDevRun()
-  
+    const userSummary = buildRequestSummary(selectedDate, chatMode, counterfactualText)
     const userMessage: Message = {
       id: `${Date.now()}-user`,
       role: "user",
-      content: scenario.prompt,
+      content: userSummary,
     }
-  
     const threadId = `${Date.now()}-thread`
-  
     const newThread: ChatThread = {
       id: threadId,
-      preview: buildPreview(scenario.prompt),
+      preview: buildPreview(userSummary),
       createdAt: new Date().toISOString(),
       messages: [userMessage],
     }
-  
+
     setChatHistory((prev) => [newThread, ...prev])
     setActiveThreadId(threadId)
     setMessages([userMessage])
     setIsLoading(true)
-  
+
     try {
-      let dateRange = null
-  
-      if (selectedDate) {
-        dateRange = buildDateRange(selectedDate)
-      }
-  
-      const endpoint = chatMode === "counterfactual" 
-        ? "http://localhost:8000/chat/counterfactual" 
-        : "http://localhost:8000/chat"
-      
+      const dateRange = buildDateRange(selectedDate)
+      const endpoint =
+        chatMode === "counterfactual"
+          ? "http://localhost:8000/chat/counterfactual"
+          : "http://localhost:8000/chat"
+
+      const payload =
+        chatMode === "counterfactual"
+          ? {
+              date_range_start: dateRange.start_date,
+              date_range_end: dateRange.end_date,
+              counterfactual_text: counterfactualText.trim(),
+            }
+          : {
+              date_range_start: dateRange.start_date,
+              date_range_end: dateRange.end_date,
+            }
+
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          user_message: scenario.prompt,
-          counterfactual_text: chatMode === "counterfactual" ? counterfactualText.trim() : undefined,
-          date_range_start: dateRange?.start_date,
-          date_range_end: dateRange?.end_date,
-        }),
+        body: JSON.stringify(payload),
       })
-  
-      const data = await response.json()
 
-      const formattedReply = `
-        S&P 500 Price: $${data.reply.val_sp500_price}
-        Oil Price: $${data.reply.val_oil_price}
-        US Treasury 10Y Yield: ${data.reply.val_us_treasury_10y}%
-        VIX Volatility Index: ${data.reply.val_vix_volatility}
-        Growth Regime: ${data.reply.nar_growth_regime}
-        Policy Stance: ${data.reply.nar_policy_stance}
-        Market Sentiment: ${data.reply.nar_market_sentiment}
-      `.trim()
-  
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.detail === "string"
+            ? data.detail
+            : `Backend request failed with status ${response.status}.`
+        )
+      }
+      if (!data?.reply) {
+        throw new Error("Backend returned an invalid response.")
+      }
+
       const assistantMessage: Message = {
         id: `${Date.now()}-assistant`,
         role: "assistant",
-        content: formattedReply,
-        isLoading: false,
-      };
+        content: formatAnalysisReply(data.reply as AnalysisReply),
+      }
+
       setChatHistory((prev) =>
         prev.map((thread) =>
           thread.id === threadId
             ? { ...thread, messages: [...thread.messages, assistantMessage] }
             : thread
         )
-      );
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsLoading(false);
+      )
+      setMessages((prev) => [...prev, assistantMessage])
     } catch (err) {
-      console.error(err)
-  
-      pendingAssistantRef.current = {
-        runId,
-        content: "Error contacting backend.",
-        threadId,
+      const assistantMessage: Message = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        content: err instanceof Error ? err.message : "Error contacting backend.",
       }
-    }
-  }
 
-  const handleStarterPromptClick = (prompt: string) => {
-    const scenario = scenarios.find((s) => s.prompt === prompt)
-    if (!scenario) return
-    handleScenarioClick(scenario.id)
-  }
-
-  const handleSendMessage = () => {
-    const userText = inputValue.trim()
-    if (!userText) return
-    setInputValue("")
-
-    const matchingScenario = scenarios.find(
-      (s) => s.prompt.toLowerCase() === userText.toLowerCase()
-    )
-
-    if (matchingScenario) {
-      handleScenarioClick(matchingScenario.id)
-      return
-    }
-
-    // Hard code check for economic articles from
-    if (userText.toLowerCase().startsWith("economic articles from")) {
-      setIsLoading(true)
-      setArticleQuery(userText)
-      fetch("/api/tavily", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: userText }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setArticles(data.articles || [])
-          setIsLoading(false)
-        })
-        .catch(() => setIsLoading(false))
-      const userMessage: Message = {
-        id: `${Date.now()}-user`,
-        role: "user",
-        content: userText,
-      }
-      setMessages((prev) => [...prev, userMessage])
-      return
-    }
-
-    const userMessage: Message = {
-      id: `${Date.now()}-user`,
-      role: "user",
-      content: userText,
-    }
-
-    const assistantMessage: Message = {
-      id: `${Date.now()}-assistant`,
-      role: "assistant",
-      content:
-        "This demo is in static mode right now. Please choose one of the preset scenarios to see an example output.",
-    }
-
-    const threadId = `${Date.now()}-thread`
-
-    const newThread: ChatThread = {
-      id: threadId,
-      preview: buildPreview(userText),
-      createdAt: new Date().toISOString(),
-      messages: [userMessage, assistantMessage],
-    }
-
-    setChatHistory((prev) => [newThread, ...prev])
-    setActiveThreadId(threadId)
-    setMessages([userMessage, assistantMessage])
-    setIsLoading(false)
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
+      setChatHistory((prev) =>
+        prev.map((thread) =>
+          thread.id === threadId
+            ? { ...thread, messages: [...thread.messages, assistantMessage] }
+            : thread
+        )
+      )
+      setMessages((prev) => [...prev, assistantMessage])
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -348,7 +242,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       <Header user={user} />
 
       <div className="flex flex-1 min-h-0 overflow-hidden gap-4 p-4 md:gap-6 md:p-6">
-        {/* LEFT SIDEBAR */}
         <div className="flex w-80 shrink-0 min-h-0 flex-col rounded-lg border bg-background">
           <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
             <h2 className="text-sm font-semibold">Chat History</h2>
@@ -362,39 +255,9 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-3">
-            {/* Show articles as styled children, visible on hover. Title is clickable, children are smaller, no link at bottom. */}
-            {articleQuery && articles.length > 0 ? (
-              <div className="mb-4 group">
-                <div className="font-semibold text-sm mb-2 cursor-pointer capitalize">
-                  {articleQuery}
-                </div>
-                <div className="space-y-1 hidden group-hover:flex flex-col transition-all duration-200">
-                  {articles.map((a, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded border border-gray-200 bg-white shadow-sm px-1.5 py-0.5 flex flex-col gap-0.5 hover:bg-gray-50 transition-all duration-200"
-                    >
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noopener"
-                        className="font-medium text-xs capitalize mb-0.5 cursor-pointer text-gray-800 hover:underline"
-                        style={{ textDecoration: 'none' }}
-                      >
-                        {a.title}
-                      </a>
-                      <div className="text-xs text-gray-700 mb-0.5 capitalize">
-                        {a.content.slice(0, 120)}...
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {/* Existing chat history */}
             {chatHistory.length === 0 ? (
               <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
-                No chats yet. Start with one of the preset scenarios.
+                No analyses yet. Pick a date to run the baseline flow or add a counterfactual.
               </div>
             ) : (
               <div className="space-y-2">
@@ -448,19 +311,13 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
           </div>
         </div>
 
-        {/* RIGHT COLUMN */}
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           <div className="flex-1 min-h-0">
             <ChatWindow
               messages={messages}
-              inputValue={inputValue}
-              onInputChange={setInputValue}
-              onSendMessage={handleSendMessage}
-              onKeyPress={handleKeyPress}
+              onSendMessage={sendBackendMessage}
               isLoading={isLoading}
               chatEndRef={chatEndRef}
-              starterPrompts={showStarterPrompts ? starterPrompts : []}
-              onStarterPromptClick={handleStarterPromptClick}
               selectedDate={selectedDate}
               onSelectedDateChange={setSelectedDate}
               chatMode={chatMode}
@@ -468,32 +325,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
               counterfactualText={counterfactualText}
               onCounterfactualTextChange={setCounterfactualText}
             />
-          </div>
-
-          <div className="shrink-0 flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={() => setDevLogOpen((v) => !v)}
-              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-muted"
-            >
-              {devLogOpen ? "Hide Dev Log" : "Show Dev Log"}
-            </button>
-          </div>
-
-          <div
-            className={[
-              "shrink-0 overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out",
-              devLogOpen ? "max-h-[340px] opacity-100" : "max-h-0 opacity-0",
-            ].join(" ")}
-            aria-hidden={!devLogOpen}
-          >
-            <div className={devLogOpen ? "pt-2" : ""}>
-              <DevLog
-                selectedDate={selectedDate}
-                runId={devRunId}
-                onDone={handleDevLogDone}
-              />
-            </div>
           </div>
         </div>
       </div>
