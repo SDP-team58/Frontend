@@ -4,11 +4,20 @@ import { useEffect, useRef, useState } from "react"
 
 import ChatWindow from "@/components/chat-window"
 import Header from "@/components/header"
+import AnalysisCard from "@/components/analysis-card"
+import type { AnalysisData } from "@/components/analysis-card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { Plus, Trash2, MoreHorizontal, MessageSquare, Bot } from "lucide-react"
 
 interface Message {
   id: string
   role: "user" | "assistant"
   content: string
+  analysisData?: AnalysisData
+  analysisMode?: "baseline" | "counterfactual"
 }
 
 interface ChatThread {
@@ -16,23 +25,14 @@ interface ChatThread {
   preview: string
   createdAt: string
   messages: Message[]
-}
-
-interface AnalysisReply {
-  val_sp500_price: number
-  val_oil_price: number
-  val_us_treasury_10y: number
-  val_vix_volatility: number
-  nar_growth_regime: string
-  nar_policy_stance: string
-  nar_market_sentiment: string
+  mode: "baseline" | "counterfactual"
 }
 
 const initialAssistantMessage: Message = {
   id: "1",
   role: "assistant",
   content:
-    "Select a date to run the baseline analysis. Switch to counterfactual mode if you want to add a counterfactual overlay.",
+    "Welcome to GENIE. Select a date and run a baseline analysis, or switch to counterfactual mode to explore alternative scenarios.",
 }
 
 function formatThreadDate(dateString: string) {
@@ -70,16 +70,8 @@ function buildPreview(text: string) {
   return text.length > 42 ? `${text.slice(0, 42)}...` : text
 }
 
-function formatAnalysisReply(reply: AnalysisReply) {
-  return `
-    S&P 500 Price: $${reply.val_sp500_price}
-    Oil Price: $${reply.val_oil_price}
-    US Treasury 10Y Yield: ${reply.val_us_treasury_10y}%
-    VIX Volatility Index: ${reply.val_vix_volatility}
-    Growth Regime: ${reply.nar_growth_regime}
-    Policy Stance: ${reply.nar_policy_stance}
-    Market Sentiment: ${reply.nar_market_sentiment}
-  `.trim()
+function formatAnalysisReply(reply: AnalysisData) {
+  return `S&P 500 Price: $${reply.val_sp500_price}\nOil Price: $${reply.val_oil_price}\nUS Treasury 10Y Yield: ${reply.val_us_treasury_10y}%\nVIX Volatility Index: ${reply.val_vix_volatility}\nGrowth Regime: ${reply.nar_growth_regime}\nPolicy Stance: ${reply.nar_policy_stance}\nMarket Sentiment: ${reply.nar_market_sentiment}`
 }
 
 function buildRequestSummary(
@@ -157,6 +149,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       preview: buildPreview(userSummary),
       createdAt: new Date().toISOString(),
       messages: [userMessage],
+      mode: chatMode,
     }
 
     setChatHistory((prev) => [newThread, ...prev])
@@ -203,10 +196,13 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
         throw new Error("Backend returned an invalid response.")
       }
 
+      const reply = data.reply as AnalysisData
       const assistantMessage: Message = {
         id: `${Date.now()}-assistant`,
         role: "assistant",
-        content: formatAnalysisReply(data.reply as AnalysisReply),
+        content: formatAnalysisReply(reply),
+        analysisData: reply,
+        analysisMode: chatMode,
       }
 
       setChatHistory((prev) =>
@@ -238,94 +234,183 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col bg-gradient-to-br from-background via-background to-muted/30">
       <Header user={user} />
 
-      <div className="flex flex-1 min-h-0 overflow-hidden gap-4 p-4 md:gap-6 md:p-6">
-        <div className="flex w-80 shrink-0 min-h-0 flex-col rounded-lg border bg-background">
-          <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
-            <h2 className="text-sm font-semibold">Chat History</h2>
-            <button
-              type="button"
+      <div className="flex flex-1 min-h-0 overflow-hidden gap-0">
+        {/* ---- Sidebar ---- */}
+        <div className="flex w-72 shrink-0 min-h-0 flex-col border-r bg-muted/20">
+          <div className="shrink-0 p-3">
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleStartNewChat}
-              className="rounded-md border border-border bg-background px-2.5 py-1 text-xs hover:bg-muted"
+              className="w-full justify-start gap-2"
             >
-              New Chat
-            </button>
+              <Plus className="size-4" />
+              New Analysis
+            </Button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3">
-            {chatHistory.length === 0 ? (
-              <div className="rounded-md border px-3 py-4 text-sm text-muted-foreground">
-                No analyses yet. Pick a date to run the baseline flow or add a counterfactual.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {chatHistory.map((thread) => (
+          <Separator />
+
+          <ScrollArea className="flex-1">
+            <div className="p-2 space-y-1">
+              {chatHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+                  <div className="flex size-12 items-center justify-center rounded-full bg-muted mb-3">
+                    <MessageSquare className="size-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    No analyses yet
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground/70">
+                    Pick a date to get started
+                  </p>
+                </div>
+              ) : (
+                chatHistory.map((thread) => (
                   <div
                     key={thread.id}
                     className={[
-                      "group relative rounded-md border transition hover:bg-muted",
-                      activeThreadId === thread.id ? "bg-muted" : "bg-background",
+                      "group relative rounded-lg px-3 py-2.5 transition-colors cursor-pointer",
+                      activeThreadId === thread.id
+                        ? "bg-accent text-accent-foreground"
+                        : "hover:bg-muted/60",
                     ].join(" ")}
+                    onClick={() => handleSelectThread(thread.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") handleSelectThread(thread.id)
+                    }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleSelectThread(thread.id)}
-                      className="block w-full pr-12 px-3 py-3 text-left"
-                    >
-                      <div className="text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 pr-8">
+                      <Badge
+                        variant={thread.mode === "counterfactual" ? "default" : "secondary"}
+                        className="shrink-0 text-[10px] px-1.5 py-0"
+                      >
+                        {thread.mode === "counterfactual" ? "CF" : "BL"}
+                      </Badge>
+                      <span className="text-[11px] text-muted-foreground">
                         {formatThreadDate(thread.createdAt)}
-                      </div>
-                      <div className="mt-1 text-sm">{thread.preview}</div>
-                    </button>
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm truncate">{thread.preview}</p>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOpenMenuThreadId((prev) =>
-                          prev === thread.id ? null : thread.id
-                        )
-                      }
-                      className="absolute right-2 top-2 rounded px-2 py-1 text-sm text-muted-foreground opacity-0 transition hover:bg-background group-hover:opacity-100"
-                      aria-label="Open chat options"
-                    >
-                      ⋯
-                    </button>
+                    <div className="absolute right-1 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenMenuThreadId((prev) =>
+                            prev === thread.id ? null : thread.id
+                          )
+                        }}
+                        aria-label="Open chat options"
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </div>
 
                     {openMenuThreadId === thread.id ? (
-                      <div className="absolute right-2 top-10 z-10 rounded-md border bg-background p-1 shadow-md">
+                      <div className="absolute right-1 top-9 z-20 rounded-md border bg-popover p-1 shadow-lg">
                         <button
                           type="button"
-                          onClick={() => handleDeleteThread(thread.id)}
-                          className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-muted"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteThread(thread.id)
+                          }}
+                          className="flex w-full items-center gap-2 rounded-sm px-2.5 py-1.5 text-sm text-destructive hover:bg-destructive/10"
                         >
-                          Delete chat
+                          <Trash2 className="size-3.5" />
+                          Delete
                         </button>
                       </div>
                     ) : null}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
         </div>
 
+        {/* ---- Main chat area ---- */}
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          <div className="flex-1 min-h-0">
-            <ChatWindow
-              messages={messages}
-              onSendMessage={sendBackendMessage}
-              isLoading={isLoading}
-              chatEndRef={chatEndRef}
-              selectedDate={selectedDate}
-              onSelectedDateChange={setSelectedDate}
-              chatMode={chatMode}
-              onChatModeChange={setChatMode}
-              counterfactualText={counterfactualText}
-              onCounterfactualTextChange={setCounterfactualText}
-            />
+          {/* Messages */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="mx-auto max-w-3xl px-4 py-6 space-y-4">
+              {messages.map((m) => {
+                if (m.role === "user") {
+                  return (
+                    <div key={m.id} className="flex justify-end">
+                      <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm text-primary-foreground leading-relaxed whitespace-pre-wrap shadow-sm">
+                        {m.content}
+                      </div>
+                    </div>
+                  )
+                }
+
+                if (m.analysisData) {
+                  return (
+                    <div key={m.id} className="flex justify-start gap-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-1">
+                        <Bot className="size-4 text-primary" />
+                      </div>
+                      <AnalysisCard
+                        data={m.analysisData}
+                        mode={m.analysisMode}
+                      />
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={m.id} className="flex justify-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-1">
+                      <Bot className="size-4 text-primary" />
+                    </div>
+                    <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-muted px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">
+                      {m.content}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {isLoading ? (
+                <div className="flex justify-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-1">
+                    <Bot className="size-4 text-primary" />
+                  </div>
+                  <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="flex gap-1">
+                        <span className="size-2 rounded-full bg-foreground/30 animate-bounce [animation-delay:0ms]" />
+                        <span className="size-2 rounded-full bg-foreground/30 animate-bounce [animation-delay:150ms]" />
+                        <span className="size-2 rounded-full bg-foreground/30 animate-bounce [animation-delay:300ms]" />
+                      </div>
+                      <span>Analyzing macro environment&hellip;</span>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div ref={chatEndRef} />
+            </div>
           </div>
+
+          {/* Input controls */}
+          <ChatWindow
+            onSendMessage={sendBackendMessage}
+            isLoading={isLoading}
+            selectedDate={selectedDate}
+            onSelectedDateChange={setSelectedDate}
+            chatMode={chatMode}
+            onChatModeChange={setChatMode}
+            counterfactualText={counterfactualText}
+            onCounterfactualTextChange={setCounterfactualText}
+          />
         </div>
       </div>
     </div>

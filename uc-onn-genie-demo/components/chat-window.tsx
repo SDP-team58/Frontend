@@ -3,12 +3,11 @@
 import React from "react"
 
 import { Calendar } from "@/components/ui/calendar"
-
-interface Message {
-  id: string
-  role: "user" | "assistant"
-  content: string
-}
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CalendarIcon, ArrowUp, Sparkles, BarChart3 } from "lucide-react"
 
 function formatDisplayDate(date: Date) {
   return date.toLocaleDateString([], {
@@ -19,10 +18,8 @@ function formatDisplayDate(date: Date) {
 }
 
 export default function ChatWindow({
-  messages,
   onSendMessage,
   isLoading,
-  chatEndRef,
   selectedDate,
   onSelectedDateChange,
   chatMode,
@@ -30,10 +27,8 @@ export default function ChatWindow({
   counterfactualText,
   onCounterfactualTextChange,
 }: {
-  messages: Message[]
   onSendMessage: () => void
   isLoading: boolean
-  chatEndRef: React.RefObject<HTMLDivElement>
   selectedDate: Date | null
   onSelectedDateChange: (date: Date | null) => void
   chatMode: "baseline" | "counterfactual"
@@ -48,138 +43,82 @@ export default function ChatWindow({
     setCalendarOpen(false)
   }
 
-  const dateLabel = selectedDate
-    ? formatDisplayDate(selectedDate)
-    : "Select a date to analyze the prior 14-day window."
-
   const canSend =
     Boolean(selectedDate) &&
     (chatMode === "baseline" || Boolean(counterfactualText.trim()))
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-lg border bg-background">
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
-        <div className="space-y-3">
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={[
-                "rounded-md px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
-                m.role === "user"
-                  ? "ml-auto w-fit max-w-[85%] bg-muted"
-                  : "mr-auto w-fit max-w-[85%] bg-secondary",
-              ].join(" ")}
-            >
-              {m.content}
-            </div>
-          ))}
-
-          {isLoading ? (
-            <div className="mr-auto w-fit max-w-[85%] rounded-md bg-secondary px-3 py-2 text-sm text-muted-foreground">
-              Running analysis...
-            </div>
-          ) : null}
-
-          <div ref={chatEndRef} />
-        </div>
-      </div>
-
-      <div className="shrink-0 border-t px-3 py-3 space-y-3">
-        <div>
-          <div className="mb-2 text-xs font-medium text-muted-foreground">
-            Mode
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => onChatModeChange("baseline")}
-              className={[
-                "flex-1 rounded-md border px-3 py-2 text-xs font-medium transition",
-                chatMode === "baseline"
-                  ? "border-border bg-muted"
-                  : "border-border bg-background hover:bg-muted",
-              ].join(" ")}
-            >
+    <div className="shrink-0 border-t bg-muted/30 backdrop-blur-sm">
+      <div className="mx-auto max-w-3xl px-4 py-4 space-y-3">
+        {/* Mode selector */}
+        <Tabs
+          value={chatMode}
+          onValueChange={(v) => onChatModeChange(v as "baseline" | "counterfactual")}
+          className="w-full"
+        >
+          <TabsList className="w-full">
+            <TabsTrigger value="baseline" className="flex-1 gap-1.5">
+              <BarChart3 className="size-3.5" />
               Baseline
-            </button>
-            <button
-              type="button"
-              onClick={() => onChatModeChange("counterfactual")}
-              className={[
-                "flex-1 rounded-md border px-3 py-2 text-xs font-medium transition",
-                chatMode === "counterfactual"
-                  ? "border-border bg-muted"
-                  : "border-border bg-background hover:bg-muted",
-              ].join(" ")}
-            >
+            </TabsTrigger>
+            <TabsTrigger value="counterfactual" className="flex-1 gap-1.5">
+              <Sparkles className="size-3.5" />
               Counterfactual
-            </button>
-          </div>
-        </div>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
-        <div>
-          <div className="mb-2 text-xs font-medium text-muted-foreground">
-            Date
-          </div>
-          <div className="rounded-md border bg-background px-3 py-2 text-sm">
-            {dateLabel}
-          </div>
-        </div>
-
-        {chatMode === "counterfactual" ? (
-          <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">
-              Counterfactual scenario
-            </label>
-            <textarea
-              value={counterfactualText}
-              onChange={(e) => onCounterfactualTextChange(e.target.value)}
-              placeholder="Describe the counterfactual scenario..."
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none resize-none"
-              rows={4}
-            />
-          </div>
-        ) : (
-          <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-            Baseline mode uses the selected date only. The backend builds context from Tavily, derives narrative outputs with Groq, and combines them with yfinance data.
-          </div>
-        )}
-      </div>
-
-      <div className="shrink-0 border-t p-3">
+        {/* Date & controls row */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCalendarOpen((v) => !v)}
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted"
-            aria-label="Open calendar"
-          >
-            Pick date
-          </button>
-          <button
-            type="button"
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={[
+                  "flex-1 justify-start gap-2 text-left font-normal",
+                  !selectedDate && "text-muted-foreground",
+                ].join(" ")}
+              >
+                <CalendarIcon className="size-4 shrink-0" />
+                {selectedDate
+                  ? formatDisplayDate(selectedDate)
+                  : "Select analysis date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate || undefined}
+                onSelect={handleDateSelect}
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Button
             onClick={onSendMessage}
             disabled={!canSend || isLoading}
-            className={[
-              "rounded-md border border-border px-4 py-2 text-sm",
-              !canSend || isLoading
-                ? "bg-background text-muted-foreground cursor-not-allowed opacity-50"
-                : "bg-background hover:bg-muted",
-            ].join(" ")}
+            size="default"
+            className="shrink-0 gap-2"
           >
-            Run analysis
-          </button>
+            <ArrowUp className="size-4" />
+            Run
+          </Button>
         </div>
 
-        {calendarOpen ? (
-          <div className="absolute z-10 mt-2 rounded-md border bg-background shadow-lg">
-            <Calendar
-              mode="single"
-              selected={selectedDate || undefined}
-              onSelect={handleDateSelect}
-            />
-          </div>
-        ) : null}
+        {/* Counterfactual input or baseline info */}
+        {chatMode === "counterfactual" ? (
+          <Textarea
+            value={counterfactualText}
+            onChange={(e) => onCounterfactualTextChange(e.target.value)}
+            placeholder="Describe the counterfactual scenario (e.g., 'Oil prices spike to $120/barrel due to OPEC supply cuts')"
+            className="resize-none text-sm"
+            rows={3}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground text-center py-1">
+            Baseline uses the 14-day window ending on the selected date. Context is built from Tavily search, narrative outputs from Groq, and market data from yfinance.
+          </p>
+        )}
       </div>
     </div>
   )
