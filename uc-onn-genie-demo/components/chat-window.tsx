@@ -6,8 +6,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CalendarIcon, ArrowUp, Sparkles, BarChart3 } from "lucide-react"
+import { CalendarIcon, ArrowUp, Sparkles, BarChart3, Info } from "lucide-react"
 
 function formatDisplayDate(date: Date) {
   return date.toLocaleDateString([], {
@@ -48,44 +47,56 @@ export default function ChatWindow({
     (chatMode === "baseline" || Boolean(counterfactualText.trim()))
 
   return (
-    <div className="shrink-0 border-t bg-muted/30 backdrop-blur-sm">
-      <div className="mx-auto max-w-3xl px-4 py-4 space-y-3">
-        {/* Mode selector */}
-        <Tabs
-          value={chatMode}
-          onValueChange={(v) => onChatModeChange(v as "baseline" | "counterfactual")}
-          className="w-full"
-        >
-          <TabsList className="w-full">
-            <TabsTrigger value="baseline" className="flex-1 gap-1.5">
-              <BarChart3 className="size-3.5" />
-              Baseline
-            </TabsTrigger>
-            <TabsTrigger value="counterfactual" className="flex-1 gap-1.5">
-              <Sparkles className="size-3.5" />
-              Counterfactual
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+    <div className="shrink-0 border-t border-border/50 bg-card/60 backdrop-blur-xl">
+      <div className="mx-auto max-w-3xl px-6 py-4 space-y-3">
+        {/* Mode toggle */}
+        <div className="flex items-center gap-1 rounded-xl bg-muted/50 p-1 ring-1 ring-border/30">
+          <button
+            type="button"
+            onClick={() => onChatModeChange("baseline")}
+            className={[
+              "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200",
+              chatMode === "baseline"
+                ? "bg-primary/15 text-primary ring-1 ring-primary/25 shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            <BarChart3 className="size-3.5" />
+            Baseline
+          </button>
+          <button
+            type="button"
+            onClick={() => onChatModeChange("counterfactual")}
+            className={[
+              "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-200",
+              chatMode === "counterfactual"
+                ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/25 shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            <Sparkles className="size-3.5" />
+            Counterfactual
+          </button>
+        </div>
 
-        {/* Date & controls row */}
+        {/* Date + run button */}
         <div className="flex items-center gap-2">
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 className={[
-                  "flex-1 justify-start gap-2 text-left font-normal",
+                  "flex-1 justify-start gap-2 text-left font-normal h-10 border-border/50 bg-input/30 hover:bg-input/50",
                   !selectedDate && "text-muted-foreground",
                 ].join(" ")}
               >
-                <CalendarIcon className="size-4 shrink-0" />
+                <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
                 {selectedDate
                   ? formatDisplayDate(selectedDate)
                   : "Select analysis date"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent className="w-auto p-0 border-border/50" align="start">
               <Calendar
                 mode="single"
                 selected={selectedDate || undefined}
@@ -98,26 +109,36 @@ export default function ChatWindow({
             onClick={onSendMessage}
             disabled={!canSend || isLoading}
             size="default"
-            className="shrink-0 gap-2"
+            className={[
+              "shrink-0 h-10 gap-2 font-medium transition-all duration-200",
+              canSend && !isLoading
+                ? "bg-primary text-primary-foreground hover:bg-primary/90 glow-ring"
+                : "",
+            ].join(" ")}
           >
             <ArrowUp className="size-4" />
             Run
           </Button>
         </div>
 
-        {/* Counterfactual input or baseline info */}
+        {/* Counterfactual input or baseline hint */}
         {chatMode === "counterfactual" ? (
-          <Textarea
-            value={counterfactualText}
-            onChange={(e) => onCounterfactualTextChange(e.target.value)}
-            placeholder="Describe the counterfactual scenario (e.g., 'Oil prices spike to $120/barrel due to OPEC supply cuts')"
-            className="resize-none text-sm"
-            rows={3}
-          />
+          <div className="space-y-1.5">
+            <Textarea
+              value={counterfactualText}
+              onChange={(e) => onCounterfactualTextChange(e.target.value)}
+              placeholder="Describe the counterfactual scenario (e.g., 'Oil prices spike to $120/barrel due to OPEC supply cuts')"
+              className="resize-none text-sm bg-input/30 border-border/50 placeholder:text-muted-foreground/50 focus-visible:ring-amber-500/30 focus-visible:border-amber-500/30"
+              rows={3}
+            />
+          </div>
         ) : (
-          <p className="text-xs text-muted-foreground text-center py-1">
-            Baseline uses the 14-day window ending on the selected date. Context is built from Tavily search, narrative outputs from Groq, and market data from yfinance.
-          </p>
+          <div className="flex items-center gap-2 rounded-lg bg-muted/20 px-3 py-2 ring-1 ring-border/20">
+            <Info className="size-3.5 shrink-0 text-muted-foreground/50" />
+            <p className="text-[11px] text-muted-foreground/70">
+              Baseline analyzes the 14-day window ending on the selected date using Tavily context, Groq narrative outputs, and yfinance market data.
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -7,7 +7,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import {
   TrendingUp,
   Landmark,
@@ -42,16 +41,16 @@ function sentimentColor(label: string) {
     lower.includes("expansionary") ||
     lower.includes("dovish")
   ) {
-    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+    return "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
   }
   if (
     lower.includes("bearish") ||
     lower.includes("contractionary") ||
     lower.includes("hawkish")
   ) {
-    return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+    return "bg-red-500/10 text-red-400 border-red-500/25"
   }
-  return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+  return "bg-amber-500/10 text-amber-400 border-amber-500/25"
 }
 
 const METRICS = [
@@ -75,16 +74,21 @@ export default function AnalysisCard({
   mode?: "baseline" | "counterfactual"
 }) {
   return (
-    <Card className="w-full max-w-2xl border-0 shadow-md bg-card/80 backdrop-blur-sm">
-      <CardHeader className="pb-3">
+    <Card className="w-full max-w-2xl border-border/40 shadow-xl shadow-black/10 bg-card ring-1 ring-border/20">
+      <CardHeader className="pb-3 px-5 pt-5">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold tracking-tight">
+          <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
             Analysis Report
           </CardTitle>
           {mode && (
             <Badge
-              variant={mode === "counterfactual" ? "default" : "secondary"}
-              className="text-[11px] font-medium"
+              variant="outline"
+              className={[
+                "text-[10px] font-mono border",
+                mode === "counterfactual"
+                  ? "border-amber-500/30 text-amber-400 bg-amber-500/5"
+                  : "border-primary/30 text-primary bg-primary/5",
+              ].join(" ")}
             >
               {mode === "counterfactual" ? "Counterfactual" : "Baseline"}
             </Badge>
@@ -92,12 +96,13 @@ export default function AnalysisCard({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-5 pt-0">
+      <CardContent className="space-y-5 px-5 pb-5 pt-0">
+        {/* Market indicators grid */}
         <div>
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
             Market Indicators
           </p>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-2">
             {METRICS.map((m) => {
               const Icon = m.icon
               const raw = data[m.key]
@@ -109,15 +114,15 @@ export default function AnalysisCard({
               return (
                 <div
                   key={m.key}
-                  className="group relative overflow-hidden rounded-lg border bg-gradient-to-br from-muted/60 to-muted/30 px-3.5 py-3 transition-colors hover:from-muted/80 hover:to-muted/50"
+                  className="rounded-xl bg-muted/30 ring-1 ring-border/20 px-3.5 py-3 transition-all duration-200 hover:bg-muted/50 hover:ring-border/40"
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon className="size-3.5 text-muted-foreground" />
-                    <p className="text-[11px] font-medium text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Icon className="size-3 text-muted-foreground/60" />
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
                       {m.label}
                     </p>
                   </div>
-                  <p className="mt-1.5 text-xl font-bold tracking-tight">
+                  <p className="mt-1.5 text-lg font-bold tracking-tight font-mono text-foreground">
                     {formatted}
                   </p>
                 </div>
@@ -126,36 +131,38 @@ export default function AnalysisCard({
           </div>
         </div>
 
-        <Separator />
+        {/* Divider */}
+        <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
 
+        {/* Narrative assessment */}
         <div>
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
             Narrative Assessment
           </p>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {NARRATIVES.map((n) => {
               const Icon = n.icon
               const parsed = parseNarrative(data[n.key])
               return (
                 <div
                   key={n.key}
-                  className="flex items-start gap-3 rounded-lg border bg-muted/20 px-3.5 py-2.5 transition-colors hover:bg-muted/40"
+                  className="flex items-start gap-3 rounded-xl bg-muted/20 ring-1 ring-border/15 px-3.5 py-2.5 transition-all duration-200 hover:bg-muted/35"
                 >
-                  <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-muted">
-                    <Icon className="size-3.5 text-muted-foreground" />
+                  <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted/50 ring-1 ring-border/20">
+                    <Icon className="size-3 text-muted-foreground/70" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-medium text-muted-foreground">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
                       {n.label}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <span
-                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${sentimentColor(parsed.label)}`}
+                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${sentimentColor(parsed.label)}`}
                       >
                         {parsed.label}
                       </span>
                       {parsed.description && (
-                        <span className="text-sm text-foreground/80">
+                        <span className="text-xs text-foreground/60">
                           {parsed.description}
                         </span>
                       )}
