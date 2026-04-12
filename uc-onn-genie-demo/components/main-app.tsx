@@ -167,7 +167,9 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
     try {
       const dateRange = buildDateRange(selectedDate);
       const endpoint =
-        chatMode === "counterfactual" ? "100.85.161.84" : "100.85.161.84";
+        chatMode === "counterfactual"
+          ? "http://100.85.161.84:8000/chat/counterfactual"
+          : "http://100.85.161.84:8000/chat";
 
       const payload =
         chatMode === "counterfactual"
