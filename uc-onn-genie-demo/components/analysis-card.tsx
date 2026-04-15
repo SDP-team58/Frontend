@@ -1,22 +1,47 @@
 "use client"
 
+import type { ReactNode } from "react"
+
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import {
-  TrendingUp,
-  Landmark,
-  BarChart3,
-  Flame,
-  DollarSign,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart"
+import {
   Activity,
+  BarChart3,
+  DollarSign,
+  FileText,
+  Flame,
+  Landmark,
+  ShieldCheck,
+  TrendingUp,
 } from "lucide-react"
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  XAxis,
+  YAxis,
+} from "recharts"
 
-export interface AnalysisData {
+export interface AnalysisReply {
   val_sp500_price: number
   val_oil_price: number
   val_us_treasury_10y: number
@@ -25,6 +50,70 @@ export interface AnalysisData {
   nar_policy_stance: string
   nar_market_sentiment: string
 }
+
+interface NumericMetricSummary {
+  label: string
+  values: number[]
+  mean: number
+  median: number
+  minimum: number
+  maximum: number
+  stddev: number
+  confidence_score: number
+}
+
+interface NarrativeMetricSummary {
+  label: string
+  candidates: string[]
+  consensus: string
+  majority_label: string
+  label_counts: Record<string, number>
+  agreement_score: number
+}
+
+interface EnsembleRun {
+  sample_index: number
+  reply: AnalysisReply
+}
+
+interface EnsembleSummary {
+  requested_runs: number
+  successful_runs: number
+  success_rate_score: number
+  numeric_confidence_score: number
+  narrative_agreement_score: number
+  overall_confidence_score: number
+  confidence_label: string
+  numeric_summaries: Record<string, NumericMetricSummary>
+  narrative_summaries: Record<string, NarrativeMetricSummary>
+  runs: EnsembleRun[]
+}
+
+interface PromptDetails {
+  narrative_prompt: string
+  model_prompt: AnalysisReply
+}
+
+export interface AnalysisData {
+  reply: AnalysisReply
+  sources?: string[] | null
+  financial_data?: Record<string, number | null> | null
+  prompt_details?: PromptDetails
+  ensemble?: EnsembleSummary
+}
+
+const METRICS = [
+  { key: "val_sp500_price" as const, label: "S&P 500", icon: TrendingUp, prefix: "$", color: "#3b82f6" },
+  { key: "val_oil_price" as const, label: "Crude Oil", icon: Flame, prefix: "$", color: "#f97316" },
+  { key: "val_us_treasury_10y" as const, label: "10Y Treasury", icon: Landmark, suffix: "%", color: "#8b5cf6" },
+  { key: "val_vix_volatility" as const, label: "VIX", icon: Activity, color: "#22c55e" },
+]
+
+const NARRATIVES = [
+  { key: "nar_growth_regime" as const, label: "Growth Regime", icon: BarChart3 },
+  { key: "nar_policy_stance" as const, label: "Policy Stance", icon: Landmark },
+  { key: "nar_market_sentiment" as const, label: "Market Sentiment", icon: DollarSign },
+]
 
 function parseNarrative(value: string) {
   if (value.includes(" - ")) {
@@ -53,18 +142,45 @@ function sentimentColor(label: string) {
   return "bg-amber-500/10 text-amber-400 border-amber-500/25"
 }
 
-const METRICS = [
-  { key: "val_sp500_price" as const, label: "S&P 500", icon: TrendingUp, prefix: "$" },
-  { key: "val_oil_price" as const, label: "Crude Oil", icon: Flame, prefix: "$" },
-  { key: "val_us_treasury_10y" as const, label: "10Y Treasury", icon: Landmark, suffix: "%" },
-  { key: "val_vix_volatility" as const, label: "VIX", icon: Activity },
-]
+function confidenceColor(score: number) {
+  if (score >= 85) {
+    return "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+  }
+  if (score >= 65) {
+    return "bg-amber-500/10 text-amber-400 border-amber-500/25"
+  }
+  return "bg-red-500/10 text-red-400 border-red-500/25"
+}
 
-const NARRATIVES = [
-  { key: "nar_growth_regime" as const, label: "Growth Regime", icon: BarChart3 },
-  { key: "nar_policy_stance" as const, label: "Policy Stance", icon: Landmark },
-  { key: "nar_market_sentiment" as const, label: "Market Sentiment", icon: DollarSign },
-]
+function formatMetricValue(
+  key: keyof AnalysisReply,
+  value: number,
+  options?: { compact?: boolean },
+) {
+  const metric = METRICS.find((item) => item.key === key)
+  const maximumFractionDigits =
+    key === "val_us_treasury_10y" || key === "val_vix_volatility" ? 3 : 2
+  const formatted = value.toLocaleString(undefined, {
+    maximumFractionDigits,
+    minimumFractionDigits: options?.compact ? 0 : undefined,
+  })
+
+  return `${metric?.prefix ?? ""}${formatted}${metric?.suffix ?? ""}`
+}
+
+function scoreLabel(score: number) {
+  if (score >= 85) {
+    return "High"
+  }
+  if (score >= 65) {
+    return "Medium"
+  }
+  return "Low"
+}
+
+function promptJson(value: unknown) {
+  return JSON.stringify(value, null, 2)
+}
 
 export default function AnalysisCard({
   data,
@@ -73,107 +189,455 @@ export default function AnalysisCard({
   data: AnalysisData
   mode?: "baseline" | "counterfactual"
 }) {
+  const reply = data.reply
+  const ensemble = data.ensemble
+
   return (
-    <Card className="w-full max-w-2xl border-border/40 shadow-xl shadow-black/10 bg-card ring-1 ring-border/20">
-      <CardHeader className="pb-3 px-5 pt-5">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-            Analysis Report
-          </CardTitle>
-          {mode && (
-            <Badge
-              variant="outline"
-              className={[
-                "text-[10px] font-mono border",
-                mode === "counterfactual"
-                  ? "border-amber-500/30 text-amber-400 bg-amber-500/5"
-                  : "border-primary/30 text-primary bg-primary/5",
-              ].join(" ")}
-            >
-              {mode === "counterfactual" ? "Counterfactual" : "Baseline"}
-            </Badge>
-          )}
+    <Card className="w-full border-border/40 bg-card shadow-xl shadow-black/10 ring-1 ring-border/20">
+      <CardHeader className="space-y-4 px-5 pt-5 pb-0">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+              Consensus Analysis Report
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Default mode now runs the model 10 times, aggregates the numeric forecast, and uses Groq to reconcile the narrative consensus.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {mode && (
+              <Badge
+                variant="outline"
+                className={[
+                  "text-[10px] font-mono border",
+                  mode === "counterfactual"
+                    ? "border-amber-500/30 text-amber-400 bg-amber-500/5"
+                    : "border-primary/30 text-primary bg-primary/5",
+                ].join(" ")}
+              >
+                {mode === "counterfactual" ? "Counterfactual" : "Baseline"}
+              </Badge>
+            )}
+            {ensemble ? (
+              <Badge
+                variant="outline"
+                className={`border text-[10px] font-mono ${confidenceColor(
+                  ensemble.overall_confidence_score,
+                )}`}
+              >
+                {ensemble.confidence_label} confidence · {ensemble.overall_confidence_score.toFixed(1)}%
+              </Badge>
+            ) : null}
+          </div>
         </div>
+
+        {ensemble ? (
+          <div className="grid gap-3 md:grid-cols-4">
+            <SummaryStat
+              title="Overall confidence"
+              value={`${ensemble.overall_confidence_score.toFixed(1)}%`}
+              subtitle={`${scoreLabel(ensemble.overall_confidence_score)} stability across ensemble samples`}
+              progressValue={ensemble.overall_confidence_score}
+              icon={<ShieldCheck className="size-3.5 text-primary" />}
+            />
+            <SummaryStat
+              title="Numeric stability"
+              value={`${ensemble.numeric_confidence_score.toFixed(1)}%`}
+              subtitle="Spread-adjusted confidence from the 10 sampled forecasts"
+              progressValue={ensemble.numeric_confidence_score}
+              icon={<TrendingUp className="size-3.5 text-primary" />}
+            />
+            <SummaryStat
+              title="Narrative agreement"
+              value={`${ensemble.narrative_agreement_score.toFixed(1)}%`}
+              subtitle="Label agreement before Groq picks the consensus explanation"
+              progressValue={ensemble.narrative_agreement_score}
+              icon={<BarChart3 className="size-3.5 text-primary" />}
+            />
+            <SummaryStat
+              title="Successful runs"
+              value={`${ensemble.successful_runs}/${ensemble.requested_runs}`}
+              subtitle={`${ensemble.success_rate_score.toFixed(1)}% sample completion rate`}
+              progressValue={ensemble.success_rate_score}
+              icon={<Activity className="size-3.5 text-primary" />}
+            />
+          </div>
+        ) : null}
       </CardHeader>
 
-      <CardContent className="space-y-5 px-5 pb-5 pt-0">
-        {/* Market indicators grid */}
-        <div>
-          <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
-            Market Indicators
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {METRICS.map((m) => {
-              const Icon = m.icon
-              const raw = data[m.key]
-              const formatted =
-                (m.prefix ?? "") +
-                (typeof raw === "number" ? raw.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(raw)) +
-                (m.suffix ?? "")
+      <CardContent className="space-y-6 px-5 py-5">
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
+              Forecast Consensus
+            </p>
+            {ensemble ? (
+              <p className="text-[11px] text-muted-foreground">
+                Median of {ensemble.successful_runs} successful model samples
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-2">
+            {METRICS.map((metric) => {
+              const Icon = metric.icon
+              const summary = ensemble?.numeric_summaries?.[metric.key]
+              const chartConfig = {
+                value: { label: metric.label, color: metric.color },
+                consensus: { label: "Consensus", color: "#94a3b8" },
+              } satisfies ChartConfig
+              const chartData =
+                ensemble?.runs.map((run) => ({
+                  sample: `#${run.sample_index}`,
+                  value: run.reply[metric.key],
+                  consensus: summary?.median ?? reply[metric.key],
+                })) ?? []
 
               return (
                 <div
-                  key={m.key}
-                  className="rounded-xl bg-muted/30 ring-1 ring-border/20 px-3.5 py-3 transition-all duration-200 hover:bg-muted/50 hover:ring-border/40"
+                  key={metric.key}
+                  className="rounded-2xl border border-border/40 bg-muted/20 p-4 shadow-sm shadow-black/5"
                 >
-                  <div className="flex items-center gap-1.5">
-                    <Icon className="size-3 text-muted-foreground/60" />
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                      {m.label}
-                    </p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
+                          <Icon className="size-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                            {metric.label}
+                          </p>
+                          <p className="text-2xl font-bold tracking-tight font-mono text-foreground">
+                            {formatMetricValue(metric.key, reply[metric.key])}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {summary ? (
+                      <Badge
+                        variant="outline"
+                        className={`border text-[10px] font-mono ${confidenceColor(
+                          summary.confidence_score,
+                        )}`}
+                      >
+                        {summary.confidence_score.toFixed(1)}% confidence
+                      </Badge>
+                    ) : null}
                   </div>
-                  <p className="mt-1.5 text-lg font-bold tracking-tight font-mono text-foreground">
-                    {formatted}
-                  </p>
+
+                  {summary ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <MiniStat label="Mean" value={formatMetricValue(metric.key, summary.mean, { compact: true })} />
+                        <MiniStat label="Range" value={`${formatMetricValue(metric.key, summary.minimum, { compact: true })} → ${formatMetricValue(metric.key, summary.maximum, { compact: true })}`} />
+                        <MiniStat label="Std dev" value={formatMetricValue(metric.key, summary.stddev, { compact: true })} />
+                      </div>
+                      <ChartContainer config={chartConfig} className="h-40 w-full">
+                        <LineChart accessibilityLayer data={chartData}>
+                          <CartesianGrid vertical={false} />
+                          <XAxis dataKey="sample" tickLine={false} axisLine={false} />
+                          <YAxis hide domain={["auto", "auto"]} />
+                          <ChartTooltip
+                            cursor={false}
+                            content={<ChartTooltipContent indicator="line" />}
+                          />
+                          <ReferenceLine
+                            y={summary.median}
+                            stroke="var(--color-consensus)"
+                            strokeDasharray="4 4"
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="value"
+                            stroke="var(--color-value)"
+                            strokeWidth={2}
+                            dot={{ r: 2 }}
+                            activeDot={{ r: 4 }}
+                          />
+                        </LineChart>
+                      </ChartContainer>
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>Consensus line: {formatMetricValue(metric.key, summary.median, { compact: true })}</span>
+                        <span>{summary.values.length} samples</span>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Divider */}
-        <div className="h-px bg-gradient-to-r from-transparent via-border/50 to-transparent" />
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
+              Narrative Consensus
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              Groq synthesizes the final narrative from all sampled outputs
+            </p>
+          </div>
 
-        {/* Narrative assessment */}
-        <div>
-          <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
-            Narrative Assessment
-          </p>
-          <div className="space-y-2">
-            {NARRATIVES.map((n) => {
-              const Icon = n.icon
-              const parsed = parseNarrative(data[n.key])
+          <div className="grid gap-3 lg:grid-cols-3">
+            {NARRATIVES.map((narrative) => {
+              const Icon = narrative.icon
+              const summary = ensemble?.narrative_summaries?.[narrative.key]
+              const parsed = parseNarrative(
+                summary?.consensus ?? reply[narrative.key],
+              )
               return (
                 <div
-                  key={n.key}
-                  className="flex items-start gap-3 rounded-xl bg-muted/20 ring-1 ring-border/15 px-3.5 py-2.5 transition-all duration-200 hover:bg-muted/35"
+                  key={narrative.key}
+                  className="rounded-2xl border border-border/40 bg-muted/20 p-4 shadow-sm shadow-black/5"
                 >
-                  <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted/50 ring-1 ring-border/20">
-                    <Icon className="size-3 text-muted-foreground/70" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-                      {n.label}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${sentimentColor(parsed.label)}`}
-                      >
-                        {parsed.label}
-                      </span>
-                      {parsed.description && (
-                        <span className="text-xs text-foreground/60">
-                          {parsed.description}
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted/50 ring-1 ring-border/20">
+                      <Icon className="size-4 text-muted-foreground/70" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                          {narrative.label}
+                        </p>
+                        {summary ? (
+                          <Badge
+                            variant="outline"
+                            className={`border text-[10px] font-mono ${confidenceColor(
+                              summary.agreement_score,
+                            )}`}
+                          >
+                            {summary.agreement_score.toFixed(1)}% agreement
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${sentimentColor(parsed.label)}`}
+                        >
+                          {parsed.label}
                         </span>
-                      )}
+                        {summary ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            Majority label: {summary.majority_label}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-sm leading-relaxed text-foreground/80">
+                        {parsed.description || "No narrative explanation was returned."}
+                      </p>
+                      {summary ? (
+                        <div className="space-y-2">
+                          <Progress value={summary.agreement_score} />
+                          <div className="flex flex-wrap gap-1.5">
+                            {Object.entries(summary.label_counts).map(([label, count]) => (
+                              <Badge
+                                key={label}
+                                variant="outline"
+                                className="border-border/40 bg-background/50 text-[10px] font-mono text-muted-foreground"
+                              >
+                                {label}: {count}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
               )
             })}
           </div>
-        </div>
+        </section>
+
+        <Accordion type="multiple" className="rounded-2xl border border-border/40 bg-muted/10 px-4">
+          {ensemble ? (
+            <AccordionItem value="runs">
+              <AccordionTrigger className="text-sm font-medium">
+                Run-by-run evidence
+              </AccordionTrigger>
+              <AccordionContent className="space-y-3">
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {ensemble.runs.map((run) => (
+                    <div
+                      key={run.sample_index}
+                      className="rounded-xl border border-border/30 bg-background/60 p-3"
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <Badge variant="outline" className="border-border/40 bg-muted/30 font-mono text-[10px]">
+                          Sample #{run.sample_index}
+                        </Badge>
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatMetricValue("val_sp500_price", run.reply.val_sp500_price, {
+                            compact: true,
+                          })} S&P
+                        </span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {METRICS.map((metric) => (
+                          <div key={metric.key} className="rounded-lg bg-muted/20 px-3 py-2">
+                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                              {metric.label}
+                            </p>
+                            <p className="font-mono text-sm text-foreground">
+                              {formatMetricValue(metric.key, run.reply[metric.key], {
+                                compact: true,
+                              })}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {NARRATIVES.map((narrative) => {
+                          const parsed = parseNarrative(run.reply[narrative.key])
+                          return (
+                            <div key={narrative.key} className="rounded-lg bg-muted/20 px-3 py-2">
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                                {narrative.label}
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                <span
+                                  className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${sentimentColor(parsed.label)}`}
+                                >
+                                  {parsed.label}
+                                </span>
+                                <span className="text-xs text-foreground/70">
+                                  {parsed.description}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ) : null}
+
+          <AccordionItem value="prompt">
+            <AccordionTrigger className="text-sm font-medium">
+              Prompt inspection
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <PromptPanel
+                  title="Narrative prompt"
+                  subtitle="Text sent into Groq before the model ensemble is constructed"
+                  content={data.prompt_details?.narrative_prompt ?? "No narrative prompt available."}
+                />
+                <PromptPanel
+                  title="Model prompt"
+                  subtitle="Structured payload sent to the HPC-hosted model"
+                  content={promptJson(data.prompt_details?.model_prompt ?? reply)}
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+
+          {data.sources?.length ? (
+            <AccordionItem value="sources">
+              <AccordionTrigger className="text-sm font-medium">
+                Source context
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="flex flex-wrap gap-2">
+                  {data.sources.map((source) => (
+                    <a
+                      key={source}
+                      href={source}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center rounded-full border border-border/40 bg-background/70 px-3 py-1 text-xs text-primary hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      {source}
+                    </a>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ) : null}
+        </Accordion>
       </CardContent>
     </Card>
+  )
+}
+
+function SummaryStat({
+  title,
+  value,
+  subtitle,
+  progressValue,
+  icon,
+}: {
+  title: string
+  value: string
+  subtitle: string
+  progressValue: number
+  icon: ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-border/40 bg-muted/20 p-4 shadow-sm shadow-black/5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            {title}
+          </p>
+          <p className="text-2xl font-bold tracking-tight text-foreground">
+            {value}
+          </p>
+        </div>
+        <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+          {icon}
+        </div>
+      </div>
+      <div className="mt-3 space-y-2">
+        <Progress value={progressValue} />
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {subtitle}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-background/50 px-3 py-2 ring-1 ring-border/20">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-mono text-foreground">
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function PromptPanel({
+  title,
+  subtitle,
+  content,
+}: {
+  title: string
+  subtitle: string
+  content: string
+}) {
+  return (
+    <div className="rounded-2xl border border-border/30 bg-background/60 p-4">
+      <div className="mb-3 flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+          <FileText className="size-4 text-primary" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+      <pre className="max-h-96 overflow-auto rounded-xl bg-muted/20 p-3 text-[11px] leading-relaxed text-foreground/80 ring-1 ring-border/20 whitespace-pre-wrap break-words">
+        {content}
+      </pre>
+    </div>
   )
 }

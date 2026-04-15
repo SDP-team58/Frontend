@@ -31,7 +31,7 @@ const initialAssistantMessage: Message = {
   id: "1",
   role: "assistant",
   content:
-    "Welcome to GENIE. Select a date and run a baseline analysis, or switch to counterfactual mode to explore alternative scenarios.",
+    "Welcome to GENIE. Select a date to run the default 10-sample ensemble, or switch to counterfactual mode to compare an alternate scenario against that consensus.",
 };
 
 function formatThreadDate(dateString: string) {
@@ -67,8 +67,13 @@ function buildPreview(text: string) {
   return text.length > 42 ? `${text.slice(0, 42)}...` : text;
 }
 
-function formatAnalysisReply(reply: AnalysisData) {
-  return `S&P 500 Price: $${reply.val_sp500_price}\nOil Price: $${reply.val_oil_price}\nUS Treasury 10Y Yield: ${reply.val_us_treasury_10y}%\nVIX Volatility Index: ${reply.val_vix_volatility}\nGrowth Regime: ${reply.nar_growth_regime}\nPolicy Stance: ${reply.nar_policy_stance}\nMarket Sentiment: ${reply.nar_market_sentiment}`;
+function formatAnalysisReply(response: AnalysisData) {
+  const { reply, ensemble } = response;
+  const confidenceLine = ensemble
+    ? `Confidence: ${ensemble.overall_confidence_score.toFixed(1)}% (${ensemble.confidence_label})`
+    : "Confidence: n/a";
+
+  return `${confidenceLine}\nS&P 500 Price: $${reply.val_sp500_price}\nOil Price: $${reply.val_oil_price}\nUS Treasury 10Y Yield: ${reply.val_us_treasury_10y}%\nVIX Volatility Index: ${reply.val_vix_volatility}\nGrowth Regime: ${reply.nar_growth_regime}\nPolicy Stance: ${reply.nar_policy_stance}\nMarket Sentiment: ${reply.nar_market_sentiment}`;
 }
 
 function buildRequestSummary(
@@ -85,15 +90,16 @@ function buildRequestSummary(
 
 function StateDropdown({ data }: { data: AnalysisData }) {
   const [open, setOpen] = useState(false);
+  const reply = data.reply;
 
   const rows: { label: string; value: string }[] = [
-    { label: "S&P 500", value: `$${data.val_sp500_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
-    { label: "Crude Oil", value: `$${data.val_oil_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
-    { label: "10Y Treasury", value: `${data.val_us_treasury_10y}%` },
-    { label: "VIX", value: String(data.val_vix_volatility) },
-    { label: "Growth Regime", value: data.nar_growth_regime },
-    { label: "Policy Stance", value: data.nar_policy_stance },
-    { label: "Market Sentiment", value: data.nar_market_sentiment },
+    { label: "S&P 500", value: `$${reply.val_sp500_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
+    { label: "Crude Oil", value: `$${reply.val_oil_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
+    { label: "10Y Treasury", value: `${reply.val_us_treasury_10y}%` },
+    { label: "VIX", value: String(reply.val_vix_volatility) },
+    { label: "Growth Regime", value: reply.nar_growth_regime },
+    { label: "Policy Stance", value: reply.nar_policy_stance },
+    { label: "Market Sentiment", value: reply.nar_market_sentiment },
   ];
 
   return (
@@ -244,12 +250,15 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
         throw new Error("Backend returned an invalid response.");
       }
 
-      const reply = data.reply as AnalysisData;
+      const analysis = data as AnalysisData;
+      if (!analysis?.reply) {
+        throw new Error("Backend returned an invalid response.");
+      }
       const assistantMessage: Message = {
         id: `${Date.now()}-assistant`,
         role: "assistant",
-        content: formatAnalysisReply(reply),
-        analysisData: reply,
+        content: formatAnalysisReply(analysis),
+        analysisData: analysis,
         analysisMode: chatMode,
       };
 
@@ -396,7 +405,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
 
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="mx-auto max-w-3xl px-6 py-8 space-y-5">
+            <div className="mx-auto max-w-6xl px-6 py-8 space-y-5">
               {messages.map((m) => {
                 if (m.role === "user") {
                   return (
@@ -447,7 +456,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                         <span className="size-1.5 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
                       </div>
                       <span className="text-xs">
-                        Analyzing macro environment&hellip;
+                        Running 10-model consensus analysis&hellip;
                       </span>
                     </div>
                   </div>

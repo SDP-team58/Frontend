@@ -48,7 +48,7 @@ export default function ChatWindow({
 
   return (
     <div className="shrink-0 border-t border-border/50 bg-card/60 backdrop-blur-xl">
-      <div className="mx-auto max-w-3xl px-6 py-4 space-y-3">
+      <div className="mx-auto max-w-6xl px-6 py-4 space-y-3">
         {/* Mode toggle */}
         <div className="flex items-center gap-1 rounded-xl bg-muted/50 p-1 ring-1 ring-border/30">
           <button
@@ -131,12 +131,15 @@ export default function ChatWindow({
               className="resize-none text-sm bg-input/30 border-border/50 placeholder:text-muted-foreground/50 focus-visible:ring-amber-500/30 focus-visible:border-amber-500/30"
               rows={3}
             />
+            <p className="text-[11px] text-muted-foreground/70">
+              Counterfactual mode still uses the 10-run ensemble. Only the scenario block changes.
+            </p>
           </div>
         ) : (
           <div className="flex items-center gap-2 rounded-lg bg-muted/20 px-3 py-2 ring-1 ring-border/20">
             <Info className="size-3.5 shrink-0 text-muted-foreground/50" />
             <p className="text-[11px] text-muted-foreground/70">
-              Baseline analyzes the 14-day window ending on the selected date using Tavily context, Groq narrative outputs, and yfinance market data.
+              Baseline now runs a 10-sample ensemble over the selected 14-day window, scores confidence from the spread, and shows the exact prompt sent to the model.
             </p>
           </div>
         )}
