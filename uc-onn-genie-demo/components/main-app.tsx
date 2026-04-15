@@ -9,7 +9,7 @@ import type { AnalysisData } from "@/components/analysis-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, MoreHorizontal, Activity, Bot, Zap } from "lucide-react";
+import { Plus, Trash2, MoreHorizontal, Activity, Bot, Zap, ChevronDown } from "lucide-react";
 
 interface Message {
   id: string;
@@ -56,9 +56,7 @@ function buildDateRange(endDate: Date) {
   const end = new Date(endDate);
   const start = new Date(end);
   start.setDate(start.getDate() - 14);
-
   const format = (d: Date) => d.toISOString().split("T")[0];
-
   return {
     start_date: format(start),
     end_date: format(end),
@@ -85,6 +83,53 @@ function buildRequestSummary(
   return `Baseline analysis for ${dateLabel}`;
 }
 
+function StateDropdown({ data }: { data: AnalysisData }) {
+  const [open, setOpen] = useState(false);
+
+  const rows: { label: string; value: string }[] = [
+    { label: "S&P 500", value: `$${data.val_sp500_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
+    { label: "Crude Oil", value: `$${data.val_oil_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
+    { label: "10Y Treasury", value: `${data.val_us_treasury_10y}%` },
+    { label: "VIX", value: String(data.val_vix_volatility) },
+    { label: "Growth Regime", value: data.nar_growth_regime },
+    { label: "Policy Stance", value: data.nar_policy_stance },
+    { label: "Market Sentiment", value: data.nar_market_sentiment },
+  ];
+
+  return (
+    <div className="mb-2 w-full max-w-2xl">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+      >
+        <ChevronDown
+          className={[
+            "size-3 transition-transform duration-200",
+            open ? "rotate-180" : "",
+          ].join(" ")}
+        />
+        Current state
+      </button>
+
+      {open && (
+        <div className="mt-2 rounded-xl border border-border/30 bg-muted/20 ring-1 ring-border/10 divide-y divide-border/20 overflow-hidden">
+          {rows.map((row) => (
+            <div key={row.label} className="flex items-center justify-between px-3.5 py-2">
+              <span className="text-[11px] text-muted-foreground/60 font-medium">
+                {row.label}
+              </span>
+              <span className="text-[11px] font-mono text-foreground/80">
+                {row.value}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const [messages, setMessages] = useState<Message[]>([
     initialAssistantMessage,
@@ -108,7 +153,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const handleSelectThread = (threadId: string) => {
     const thread = chatHistory.find((t) => t.id === threadId);
     if (!thread) return;
-
     setOpenMenuThreadId(null);
     setActiveThreadId(threadId);
     setMessages(thread.messages);
@@ -128,7 +172,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
   const handleDeleteThread = (threadId: string) => {
     setChatHistory((prev) => prev.filter((thread) => thread.id !== threadId));
     setOpenMenuThreadId(null);
-
     if (activeThreadId === threadId) {
       setActiveThreadId(null);
       setMessages([initialAssistantMessage]);
@@ -185,9 +228,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
 
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -246,7 +287,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       <Header user={user} />
 
       <div className="relative flex flex-1 min-h-0 overflow-hidden">
-        {/* ---- Sidebar ---- */}
         <div className="flex w-64 shrink-0 min-h-0 flex-col border-r border-border/50 bg-sidebar">
           <div className="shrink-0 p-3">
             <Button
@@ -354,9 +394,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
           </ScrollArea>
         </div>
 
-        {/* ---- Main chat area ---- */}
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-          {/* Messages */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="mx-auto max-w-3xl px-6 py-8 space-y-5">
               {messages.map((m) => {
@@ -376,10 +414,10 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                       <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 mt-1">
                         <Zap className="size-3.5 text-primary" />
                       </div>
-                      <AnalysisCard
-                        data={m.analysisData}
-                        mode={m.analysisMode}
-                      />
+                      <div className="flex flex-col w-full max-w-2xl">
+                        <StateDropdown data={m.analysisData} />
+                        <AnalysisCard data={m.analysisData} mode={m.analysisMode} />
+                      </div>
                     </div>
                   );
                 }
@@ -420,7 +458,6 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
             </div>
           </div>
 
-          {/* Input controls */}
           <ChatWindow
             onSendMessage={sendBackendMessage}
             isLoading={isLoading}
