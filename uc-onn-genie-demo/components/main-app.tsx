@@ -217,8 +217,8 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       const dateRange = buildDateRange(selectedDate);
       const endpoint =
         chatMode === "counterfactual"
-          ? "http://100.85.161.84:8000/chat/counterfactual"
-          : "http://100.85.161.84:8000/chat";
+          ? "/api/chat/counterfactual"
+          : "/api/chat";
 
       const payload =
         chatMode === "counterfactual"
@@ -234,7 +234,10 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
 
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(payload),
       });
 
