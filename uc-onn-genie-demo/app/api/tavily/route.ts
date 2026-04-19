@@ -1,6 +1,15 @@
+import { tavily } from '@tavily/core'
 import { NextRequest, NextResponse } from 'next/server'
 
-const { tavily } = require('@tavily/core')
+interface TavilyArticleResult {
+  title: string
+  content: string
+  url: string
+}
+
+interface TavilySearchResponse {
+  results?: TavilyArticleResult[]
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,10 +20,9 @@ export async function POST(request: NextRequest) {
     }
 
     const client = tavily({ apiKey: process.env.TAVILY_API_KEY })
-    const response = await client.search(query)
+    const response = (await client.search(query)) as TavilySearchResponse
 
-    // Extract title and content from results
-    const articles = response.results.slice(0,3).map((result: any) => ({
+    const articles = (response.results ?? []).slice(0, 3).map((result) => ({
       title: result.title,
       content: result.content,
       url: result.url,
@@ -29,4 +37,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

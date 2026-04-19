@@ -103,15 +103,15 @@ function StateDropdown({ data }: { data: AnalysisData }) {
   ];
 
   return (
-    <div className="mb-2 w-full max-w-2xl">
+    <div className="mb-3 w-full">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+        className="flex items-center gap-2 text-xs text-muted-foreground/70 transition-colors hover:text-muted-foreground sm:text-sm xl:text-base"
       >
         <ChevronDown
           className={[
-            "size-3 transition-transform duration-200",
+            "size-3.5 transition-transform duration-200 xl:size-4",
             open ? "rotate-180" : "",
           ].join(" ")}
         />
@@ -121,11 +121,11 @@ function StateDropdown({ data }: { data: AnalysisData }) {
       {open && (
         <div className="mt-2 rounded-xl border border-border/30 bg-muted/20 ring-1 ring-border/10 divide-y divide-border/20 overflow-hidden">
           {rows.map((row) => (
-            <div key={row.label} className="flex items-center justify-between px-3.5 py-2">
-              <span className="text-[11px] text-muted-foreground/60 font-medium">
+            <div key={row.label} className="flex items-center justify-between gap-4 px-4 py-3">
+              <span className="text-xs font-medium text-muted-foreground/70 sm:text-sm xl:text-base">
                 {row.label}
               </span>
-              <span className="text-[11px] font-mono text-foreground/80">
+              <span className="text-xs font-mono text-foreground/85 sm:text-sm xl:text-base">
                 {row.value}
               </span>
             </div>
@@ -299,13 +299,14 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
       <Header user={user} />
 
       <div className="relative flex flex-1 min-h-0 overflow-hidden">
-        <div className="flex w-64 shrink-0 min-h-0 flex-col border-r border-border/50 bg-sidebar">
+        <div className="hidden shrink-0 min-h-0 border-r border-border/50 bg-sidebar md:flex md:w-72 xl:w-80 2xl:w-96">
+          <div className="flex min-h-0 flex-1 flex-col">
           <div className="shrink-0 p-3">
             <Button
               variant="outline"
               size="sm"
               onClick={handleStartNewChat}
-              className="w-full justify-start gap-2 border-dashed border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50"
+              className="h-10 w-full justify-start gap-2 border-dashed border-primary/30 text-sm text-primary hover:bg-primary/10 hover:border-primary/50 xl:h-11 xl:text-base"
             >
               <Plus className="size-4" />
               New Analysis
@@ -313,7 +314,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
           </div>
 
           <div className="px-3 pb-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">
+            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground/60 xl:text-sm">
               History
             </p>
           </div>
@@ -352,6 +353,7 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                         variant="outline"
                         className={[
                           "shrink-0 text-[9px] px-1.5 py-0 font-mono border",
+                          "xl:text-[11px]",
                           thread.mode === "counterfactual"
                             ? "border-amber-500/30 text-amber-400 bg-amber-500/5"
                             : "border-primary/30 text-primary bg-primary/5",
@@ -359,11 +361,11 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                       >
                         {thread.mode === "counterfactual" ? "CF" : "BL"}
                       </Badge>
-                      <span className="text-[10px] text-muted-foreground/70 font-mono">
+                      <span className="text-xs text-muted-foreground/70 font-mono xl:text-sm">
                         {formatThreadDate(thread.createdAt)}
                       </span>
                     </div>
-                    <p className="mt-1.5 text-xs text-secondary-foreground/80 truncate leading-relaxed">
+                    <p className="mt-1.5 text-sm text-secondary-foreground/80 truncate leading-relaxed xl:text-base">
                       {thread.preview}
                     </p>
 
@@ -404,16 +406,20 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
               )}
             </div>
           </ScrollArea>
+          </div>
         </div>
 
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="mx-auto max-w-6xl px-6 py-8 space-y-5">
+            <div className="mx-auto w-full max-w-[1800px] space-y-6 px-4 py-6 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 2xl:py-8">
               {messages.map((m) => {
                 if (m.role === "user") {
                   return (
-                    <div key={m.id} className="flex justify-end">
-                      <div className="max-w-[75%] rounded-2xl rounded-br-sm bg-primary/15 ring-1 ring-primary/20 px-4 py-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                    <div key={m.id} className="w-full">
+                      <div className="w-full rounded-3xl bg-primary/15 px-5 py-4 text-base leading-relaxed whitespace-pre-wrap text-foreground ring-1 ring-primary/20 xl:px-6 xl:py-5 xl:text-lg 2xl:text-[1.15rem]">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-primary/70 xl:text-sm">
+                          Request
+                        </p>
                         {m.content}
                       </div>
                     </div>
@@ -422,11 +428,11 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
 
                 if (m.analysisData) {
                   return (
-                    <div key={m.id} className="flex justify-start gap-3">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 mt-1">
-                        <Zap className="size-3.5 text-primary" />
+                    <div key={m.id} className="flex w-full items-start gap-4">
+                      <div className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20 xl:size-12">
+                        <Zap className="size-4 text-primary xl:size-5" />
                       </div>
-                      <div className="flex flex-col w-full max-w-2xl">
+                      <div className="flex min-w-0 flex-1 flex-col">
                         <StateDropdown data={m.analysisData} />
                         <AnalysisCard data={m.analysisData} mode={m.analysisMode} />
                       </div>
@@ -435,11 +441,14 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
                 }
 
                 return (
-                  <div key={m.id} className="flex justify-start gap-3">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 mt-1">
-                      <Bot className="size-3.5 text-primary" />
+                  <div key={m.id} className="flex w-full items-start gap-4">
+                    <div className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20 xl:size-12">
+                      <Bot className="size-4 text-primary xl:size-5" />
                     </div>
-                    <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-card ring-1 ring-border/50 px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">
+                    <div className="w-full rounded-3xl bg-card px-5 py-4 text-base leading-relaxed whitespace-pre-wrap ring-1 ring-border/50 xl:px-6 xl:py-5 xl:text-lg 2xl:text-[1.15rem]">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 xl:text-sm">
+                        Response
+                      </p>
                       {m.content}
                     </div>
                   </div>
@@ -447,18 +456,18 @@ export default function MainApp({ user }: { user: Record<string, unknown> }) {
               })}
 
               {isLoading ? (
-                <div className="flex justify-start gap-3">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 mt-1">
-                    <Zap className="size-3.5 text-primary animate-pulse-glow" />
+                <div className="flex w-full items-start gap-4">
+                  <div className="mt-1 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20 xl:size-12">
+                    <Zap className="size-4 text-primary animate-pulse-glow xl:size-5" />
                   </div>
-                  <div className="rounded-2xl rounded-bl-sm bg-card ring-1 ring-border/50 px-4 py-3.5">
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <div className="w-full rounded-3xl bg-card px-5 py-4 ring-1 ring-border/50 xl:px-6 xl:py-5">
+                    <div className="flex items-center gap-3 text-base text-muted-foreground xl:text-lg">
                       <div className="flex gap-1">
                         <span className="size-1.5 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
                         <span className="size-1.5 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
                         <span className="size-1.5 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
                       </div>
-                      <span className="text-xs">
+                      <span className="text-sm xl:text-base">
                         Running 10-model consensus analysis&hellip;
                       </span>
                     </div>
